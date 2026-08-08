@@ -34,6 +34,12 @@ export const boxRecipe = defineRecipe({
       },
       link: {
         bg: "boxBgPrimary",
+        // Its two siblings above, `solid` and `outline`, paint the same
+        // background and both state `textPrimary`; this one did not, so its
+        // text inherited from the page and could land unreadable on the same
+        // surface they render correctly on (NEH-441). Character for character
+        // the defect already fixed in `listRecipe` under NEH-167 cycle 9.
+        color: "textPrimary",
         _hover: {
           textDecoration: "underline",
         },

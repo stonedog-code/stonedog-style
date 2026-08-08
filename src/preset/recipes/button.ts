@@ -45,11 +45,23 @@ export const buttonRecipe = defineRecipe({
       },
       outline: {
         bg: "buttonBgAccent",
+        // Paints an accent background, so it must state the text colour that
+        // goes with it. Without this the label inherits whatever the page has,
+        // and under a theme whose surface sits at the same end of the scale as
+        // the inherited text it is unreadable — the NEH-278 family (NEH-441).
+        //
+        // `buttonTextAccent` exists in the token contract specifically to pair
+        // with `buttonBgAccent`, and every host already defines it, so this
+        // costs no host action. The hover state repaints the background, so it
+        // takes the matching hover pairing rather than letting the base colour
+        // ride along against a different surface.
+        color: "buttonTextAccent",
         border: "2px solid",
         borderRadius: 0,
         _hover: {
           border: "2px solid",
           bg: "buttonBgAccentHover",
+          color: "buttonTextAccentHover",
         },
       },
       aurora: {

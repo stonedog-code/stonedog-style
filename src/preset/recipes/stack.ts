@@ -72,6 +72,13 @@ export const stackRecipe = defineRecipe({
         },
         ghost: {
             bg: "boxBgSecondary",
+            // Found by the new stylesheet guard, not by the NEH-441 sweep that
+            // preceded it — the sweep missed this one, which is the argument
+            // for having a guard rather than a one-off scan. `matte` directly
+            // above paints the identical `boxBgSecondary` and pairs it with
+            // `textSecondary`; this painted the same surface and left its text
+            // to inherit.
+            color: "textSecondary",
             border: "none",
         },
         none: {
