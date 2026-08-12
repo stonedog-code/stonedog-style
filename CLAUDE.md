@@ -205,10 +205,24 @@ packages/stonedog-style` answers the pin question in one line, and
 row wrong in both directions on the same day).
 
 A change that suits one must not regress the others, which is what the
-default-pinning tests are guarding. Note the old names: this package's docs used
-to call the Optima repos `maximus-compliance` / `maximus-cloud-saas`, and the
-npm scope inside them is still `@maximus/*` (NEH-238, sequenced behind trademark
-clearance). The *repos* are `optima-*`.
+default-pinning tests are guarding.
+
+**The `@maximus/*` rename is done.** This paragraph used to say the npm scope
+inside the Optima repos was "still `@maximus/*`, sequenced behind trademark
+clearance". That stopped being true on 2026-08-04, and a CLAUDE.md is loaded as
+instructions — so a stale one is worse than an absent one. Verified against the
+repos rather than against the issue that reported it:
+
+| Repo | Workspace scope |
+|---|---|
+| `optima-filings` | `@optima-compliance/*` |
+| `optima-cloud-saas` | `@optima-cloud/*` |
+
+Note `optima-filings` is **`@optima-compliance`**, not the bare `@optima` the
+tracker recorded — which is the point of reading `packages/*/package.json`
+instead of the ticket. Nothing here depends on either scope; this table exists so
+the next person does not re-derive it, and so the wrong answer stops being
+written down.
 
 ## How a consumer wires this up
 
