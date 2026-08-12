@@ -1,8 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import StyledText from "../StyledText";
 import StyledHeading from "../StyledHeading";
-import { StonedogStyleProvider } from "../../config/style-config";
-import { fontSizeMap, getFontSizeValue } from "../../config/font-size";
+import {
+  fontSizeMap,
+  getFontSizeValue,
+  resolveFontSizeKey,
+  stepUpFontSize,
+} from "../../config/font-size";
+import type { FontSizeKey } from "../../config/types";
 
 describe("StyledText", () => {
   it("renders its children", () => {
@@ -10,35 +15,39 @@ describe("StyledText", () => {
     expect(screen.getByText("hello")).toBeInTheDocument();
   });
 
+  /**
+   * The size rule, asserted on the rule rather than on a rendered `font-size`.
+   *
+   * These three used to render a `StyledText` and call
+   * `toHaveStyle({ fontSize: fontSizeMap.xl })`. **That could not fail**
+   * (NEH-406): every `fontSizeMap` entry is a `var(--font-sizes-*, …)`
+   * reference, jsdom rejects it against the `font-size` grammar and drops the
+   * declaration, so the element carries no `style` attribute at all and the
+   * matcher compared "" with "". Swapping `xl` for `xs` left them green.
+   *
+   * So the claim is split. Which step wins is a pure function, and belongs
+   * here where it can genuinely be checked; what that step *measures* is a
+   * browser question and lives in `StyledText.ct.tsx`.
+   */
   it("sizes text from the app-wide profile", () => {
-    render(
-      <StonedogStyleProvider fontSizeProfile="xl">
-        <StyledText>big</StyledText>
-      </StonedogStyleProvider>,
-    );
-    expect(screen.getByText("big")).toHaveStyle({ fontSize: fontSizeMap.xl });
+    expect(resolveFontSizeKey({ profile: "xl" })).toBe("xl");
   });
 
   it("lets an explicit size win over the profile", () => {
-    render(
-      <StonedogStyleProvider fontSizeProfile="xl">
-        <StyledText size="xs">small anyway</StyledText>
-      </StonedogStyleProvider>,
-    );
-    expect(screen.getByText("small anyway")).toHaveStyle({
-      fontSize: fontSizeMap.xs,
-    });
+    expect(resolveFontSizeKey({ size: "xs", profile: "xl" })).toBe("xs");
   });
 
   it("pins text to md when fixedSize is set", () => {
     // Used where a label must not grow with the profile — e.g. text inside a
     // fixed-height control that would otherwise clip.
-    render(
-      <StonedogStyleProvider fontSizeProfile="xl">
-        <StyledText fixedSize>pinned</StyledText>
-      </StonedogStyleProvider>,
-    );
-    expect(screen.getByText("pinned")).toHaveStyle({ fontSize: fontSizeMap.md });
+    expect(resolveFontSizeKey({ fixedSize: true, profile: "xl" })).toBe("md");
+    // ...and an explicit size still outranks the pin, or `fixedSize` would be
+    // a trap on any call site that also states a size.
+    expect(resolveFontSizeKey({ size: "sm", fixedSize: true, profile: "xl" })).toBe("sm");
+  });
+
+  it("falls back to md when the host names no profile", () => {
+    expect(resolveFontSizeKey({})).toBe("md");
   });
 
   it("truncates with ellipsis when asked", () => {
@@ -57,18 +66,17 @@ describe("StyledText", () => {
 });
 
 describe("StyledHeading", () => {
+  // Same split as above, and for the same reason — a rendered `font-size` is
+  // unassertable here. The heading rule is "one step above whatever the text
+  // around it is at", so it is `stepUpFontSize` composed with the same
+  // precedence, and both halves are checkable directly.
   it("renders one tier above the current profile, so hierarchy survives every font size", () => {
-    render(
-      <StonedogStyleProvider fontSizeProfile="md">
-        <StyledHeading>title</StyledHeading>
-      </StonedogStyleProvider>,
-    );
-    expect(screen.getByText("title")).toHaveStyle({ fontSize: fontSizeMap.lg });
+    expect(stepUpFontSize(resolveFontSizeKey({ profile: "md" }) as FontSizeKey)).toBe("lg");
+    expect(stepUpFontSize(resolveFontSizeKey({ profile: "xl" }) as FontSizeKey)).toBe("2xl");
   });
 
   it("clamps at the top of the scale rather than running off the end", () => {
-    render(<StyledHeading size="9xl">huge</StyledHeading>);
-    expect(screen.getByText("huge")).toHaveStyle({ fontSize: fontSizeMap["9xl"] });
+    expect(stepUpFontSize("9xl")).toBe("9xl");
   });
 
   it("defaults to an h1", () => {

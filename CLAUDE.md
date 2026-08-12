@@ -468,6 +468,34 @@ that variant's surface is a *fixed* `gray.800`→`gray.900` gradient, so themed
 text on it renders dark-on-dark in a light theme. The literal is correct until
 the surface and the text move together, which is what that cleanup has to do.
 
+### A `var()` value is unassertable in jsdom (NEH-406)
+
+`toHaveStyle({ fontSize: "var(--font-sizes-xl, 1.25rem)" })` **cannot fail.**
+jsdom validates a declaration against the property's grammar, a `var()`
+reference is not a `<length>`, so the declaration is dropped and the element
+ends up with **no `style` attribute at all**. The matcher then compares `""`
+with the `""` it gets from parsing the expectation, and passes — for every
+possible expected value.
+
+That is not a hypothetical: `StyledSpinner`'s spec named `2rem` while the scale
+said `1.25rem`, and stayed green from the commit that moved the scale until it
+was found. Its neighbours in `StyledText.test.tsx` looked more careful because
+they asserted against `fontSizeMap.xl` rather than a literal — but every entry
+in that map *is* a `var()` reference, so they were equally vacuous.
+
+**Split the claim across the two tiers.** *Which* value the component picks is
+usually a pure function and belongs in jest — `resolveFontSizeKey` was extracted
+out of `StyledText` for exactly this. What that value *renders as* is a browser
+question and belongs in a `.ct.tsx`, where a real engine resolves the property.
+
+`src/__tests__/no-vacuous-style-assertions.test.ts` enforces it: no
+`toHaveStyle` expectation may contain `var(`, or name a `fontSizeMap` entry.
+
+The general lesson, which is the same one the section below teaches one layer
+down: **a green test that cannot fail is worse than no test**, because it is
+counted as coverage. The only way to know is to break the thing under test and
+check that the test notices.
+
 ### A recipe can only style what the element lets it (NEH-234)
 
 `inputBoolRecipe`'s slot is a native `<input type="checkbox">` at
