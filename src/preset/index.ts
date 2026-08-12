@@ -14,6 +14,7 @@ import {
   inputDropdownItemRecipe,
   inputDropdownRecipe,
 } from "./recipes/input-dropdown";
+import { alertRecipe } from "./recipes/alert";
 import { inputRadioRootRecipe } from "./recipes/input-radio";
 import { inputTextRecipe } from "./recipes/input-text";
 import { listRecipe } from "./recipes/list";
@@ -53,7 +54,7 @@ export interface StonedogStylePresetOptions {
 /**
  * Every recipe, keyed by the name it is exported under in `styled-system/recipes`.
  *
- * Four of these (`listRecipe`, `menuRecipe`, `inputBoolRecipe`,
+ * Five of these (`alertRecipe`, `listRecipe`, `menuRecipe`, `inputBoolRecipe`,
  * `inputRadioRootRecipe`) are slot recipes declared with `defineSlotRecipe`.
  * Panda accepts them here rather than under `slotRecipes` and generates them
  * correctly — verified against HopperGuard's own generated output. Moving them
@@ -61,6 +62,7 @@ export interface StonedogStylePresetOptions {
  * generated surface, so it is deliberately not done during extraction.
  */
 const recipes = {
+  alertRecipe,
   arrowRecipe,
   boxRecipe,
   buttonRecipe,
