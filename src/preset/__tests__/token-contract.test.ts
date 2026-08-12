@@ -5,6 +5,7 @@ import {
   TEXT_BACKGROUND_PAIRS,
   colorTokenNames,
   createSemanticColors,
+  emphasisTokenNames,
   createSemanticFontWeights,
   createSemanticFonts,
   fontTokenNames,
@@ -15,9 +16,11 @@ import {
 import { stonedogStylePreset, stonedogStyleRecipes } from "../index";
 
 describe("the colour token contract", () => {
-  it("maps every token to a bare custom property at the default prefix", () => {
+  it("maps every surface and meaning token to a bare custom property", () => {
     const colors = createSemanticColors();
+    const emphasis = new Set(emphasisTokenNames());
     for (const [token, def] of Object.entries(colors)) {
+      if (emphasis.has(token)) continue; // asserted separately below
       expect(def.value).toMatch(
         new RegExp(`^var\\(--${DEFAULT_CSS_VAR_PREFIX}-[a-z0-9-]+\\)$`),
       );
@@ -28,6 +31,42 @@ describe("the colour token contract", () => {
     }
   });
 
+  /**
+   * The emphasis tiers are the ONE exception to fallback-free colour, and the
+   * exception is narrow enough to enumerate (NEH-519).
+   *
+   * It is allowed because "like the surrounding text, but quieter" has a
+   * correct answer on every theme, which "what colour is this surface?" does
+   * not. The fallback must therefore stay RELATIVE — a literal here would be
+   * the very defect the fallback-free rule exists to prevent, wearing the
+   * exception as cover.
+   */
+  it("gives the emphasis tiers a relative fallback, and only them", () => {
+    const colors = createSemanticColors();
+    const emphasis = emphasisTokenNames();
+    expect(emphasis.length).toBeGreaterThan(0);
+
+    for (const token of emphasis) {
+      const value = colors[token]!.value;
+      expect(value).toMatch(
+        new RegExp(`^var\\(--${DEFAULT_CSS_VAR_PREFIX}-[a-z0-9-]+, .+\\)$`),
+      );
+      // Relative to the inherited colour, never a literal. `currentColor`
+      // inside a `color` declaration resolves to the INHERITED value, which is
+      // what lets one default work on a light theme and a dark one.
+      expect(value).toContain("currentColor");
+      expect(value).not.toMatch(/#[0-9a-f]{3}|rgb\(|hsl\(/i);
+    }
+
+    // ...and nothing else grew a fallback by accident. A defaulted surface
+    // token would render a plausible wrong colour instead of an obviously
+    // missing one, which is precisely the trade the contract refuses.
+    const defaulted = Object.entries(colors)
+      .filter(([, def]) => /^var\([^,]+,/.test(def.value))
+      .map(([token]) => token);
+    expect(defaulted.sort()).toEqual([...emphasis].sort());
+  });
+
   it("re-namespaces every property when a consumer picks its own prefix", () => {
     const colors = createSemanticColors("optima");
     const values = Object.values(colors).map((d) => d.value);
@@ -36,11 +75,32 @@ describe("the colour token contract", () => {
     expect(values.some((v) => v.includes("--hopper-"))).toBe(false);
   });
 
-  it("names one required custom property per token", () => {
-    expect(requiredCssCustomProperties()).toHaveLength(colorTokenNames().length);
+  it("names one required custom property per FALLBACK-FREE token", () => {
+    // The identity used to be `required === every colour token`. NEH-519 moved
+    // it, deliberately and for the first time: the emphasis tiers are colour
+    // tokens that carry a default, so requiring them would fail every existing
+    // host for no safety gain — the same argument that keeps the font tokens
+    // out (NEH-277).
+    //
+    // Stated as an equation rather than a number, so it keeps meaning something
+    // as tokens are added on either side. What it still guarantees is the thing
+    // that matters: a host defining everything `required` names can render
+    // every token that would otherwise paint nothing.
+    expect(requiredCssCustomProperties()).toHaveLength(
+      colorTokenNames().length - emphasisTokenNames().length,
+    );
     expect(requiredCssCustomProperties("optima")).toContain(
       "--optima-box-primary-bg",
     );
+  });
+
+  it("requires no emphasis property of a host", () => {
+    // Named explicitly, because the arithmetic above would also be satisfied by
+    // requiring an emphasis tier and dropping a surface token.
+    const required = requiredCssCustomProperties();
+    for (const suffix of ["text-muted-text", "text-subtle-text"]) {
+      expect(required).not.toContain(`--hopper-${suffix}`);
+    }
   });
 
   it("emits no duplicate custom properties", () => {
@@ -211,7 +271,9 @@ describe("the font contract", () => {
     // undefined font falls back to the browser's face and the page stays
     // readable, where an undefined colour paints nothing.
     const required = requiredCssCustomProperties();
-    expect(required).toHaveLength(colorTokenNames().length);
+    expect(required).toHaveLength(
+      colorTokenNames().length - emphasisTokenNames().length,
+    );
     expect(required.some((p) => p.includes("font-"))).toBe(false);
   });
 
