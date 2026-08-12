@@ -6,6 +6,8 @@ import {
   colorTokenNames,
   createSemanticColors,
   emphasisTokenNames,
+  statusSurfaceTokenNames,
+  defaultedColorTokenNames,
   createSemanticFontWeights,
   createSemanticFonts,
   fontTokenNames,
@@ -18,9 +20,9 @@ import { stonedogStylePreset, stonedogStyleRecipes } from "../index";
 describe("the colour token contract", () => {
   it("maps every surface and meaning token to a bare custom property", () => {
     const colors = createSemanticColors();
-    const emphasis = new Set(emphasisTokenNames());
+    const defaulted = new Set(defaultedColorTokenNames());
     for (const [token, def] of Object.entries(colors)) {
-      if (emphasis.has(token)) continue; // asserted separately below
+      if (defaulted.has(token)) continue; // asserted separately below
       expect(def.value).toMatch(
         new RegExp(`^var\\(--${DEFAULT_CSS_VAR_PREFIX}-[a-z0-9-]+\\)$`),
       );
@@ -58,13 +60,55 @@ describe("the colour token contract", () => {
       expect(value).not.toMatch(/#[0-9a-f]{3}|rgb\(|hsl\(/i);
     }
 
-    // ...and nothing else grew a fallback by accident. A defaulted surface
-    // token would render a plausible wrong colour instead of an obviously
-    // missing one, which is precisely the trade the contract refuses.
-    const defaulted = Object.entries(colors)
+    // ...and nothing outside the two declared groups grew a fallback by
+    // accident. A defaulted SURFACE token would render a plausible wrong colour
+    // instead of an obviously missing one, which is precisely the trade the
+    // contract refuses.
+    const withFallback = Object.entries(colors)
       .filter(([, def]) => /^var\([^,]+,/.test(def.value))
       .map(([token]) => token);
-    expect(defaulted.sort()).toEqual([...emphasis].sort());
+    expect(withFallback.sort()).toEqual([...defaultedColorTokenNames()].sort());
+  });
+
+  /**
+   * The status chips are the SECOND defaulted group, and their default obeys a
+   * different rule from the emphasis tiers (NEH-421).
+   *
+   * Emphasis is relative to the inherited colour and may name none of its own.
+   * Status is the opposite: **the hue is the meaning** — red has to stay red —
+   * so a literal is correct here and nowhere else. What must stay relative is
+   * the LIGHTNESS of the fill, or a chip picked against a light theme becomes a
+   * glaring slab on a dark one.
+   *
+   * So: fills translucent, borders solid. The borders were translucent in the
+   * first attempt and measured 1.72-2.05:1 against the page, failing WCAG
+   * 1.4.11; `StyledAlert.ct.tsx` is what caught it and is what pins it now.
+   */
+  it("gives the status chips a fixed hue with a relative lightness", () => {
+    const colors = createSemanticColors();
+    const status = statusSurfaceTokenNames();
+    expect(status.length).toBeGreaterThan(0);
+
+    for (const token of status) {
+      const value = colors[token]!.value;
+      expect(value).toMatch(
+        new RegExp(`^var\\(--${DEFAULT_CSS_VAR_PREFIX}-[a-z0-9-]+, .+\\)$`),
+      );
+      // A hue, stated. Unlike every other colour in this file, and unlike the
+      // emphasis tiers, which may not name one at all.
+      expect(value).toMatch(/#[0-9a-f]{6}/i);
+      expect(value).not.toContain("currentColor");
+    }
+
+    // The fills follow the page; the borders do not need to. Split explicitly,
+    // because "they all use color-mix" would have passed the version that
+    // failed contrast.
+    for (const token of status.filter((t) => t.startsWith("box"))) {
+      expect(colors[token]!.value).toContain("transparent");
+    }
+    for (const token of status.filter((t) => t.startsWith("border"))) {
+      expect(colors[token]!.value).not.toContain("transparent");
+    }
   });
 
   it("re-namespaces every property when a consumer picks its own prefix", () => {
@@ -87,18 +131,27 @@ describe("the colour token contract", () => {
     // that matters: a host defining everything `required` names can render
     // every token that would otherwise paint nothing.
     expect(requiredCssCustomProperties()).toHaveLength(
-      colorTokenNames().length - emphasisTokenNames().length,
+      colorTokenNames().length - defaultedColorTokenNames().length,
     );
     expect(requiredCssCustomProperties("optima")).toContain(
       "--optima-box-primary-bg",
     );
   });
 
-  it("requires no emphasis property of a host", () => {
+  it("requires no defaulted property of a host", () => {
     // Named explicitly, because the arithmetic above would also be satisfied by
     // requiring an emphasis tier and dropping a surface token.
     const required = requiredCssCustomProperties();
-    for (const suffix of ["text-muted-text", "text-subtle-text"]) {
+    for (const suffix of [
+      "text-muted-text",
+      "text-subtle-text",
+      "box-success-bg",
+      "box-warning-bg",
+      "box-error-bg",
+      "box-success-border",
+      "box-warning-border",
+      "box-error-border",
+    ]) {
       expect(required).not.toContain(`--hopper-${suffix}`);
     }
   });
@@ -272,7 +325,7 @@ describe("the font contract", () => {
     // readable, where an undefined colour paints nothing.
     const required = requiredCssCustomProperties();
     expect(required).toHaveLength(
-      colorTokenNames().length - emphasisTokenNames().length,
+      colorTokenNames().length - defaultedColorTokenNames().length,
     );
     expect(required.some((p) => p.includes("font-"))).toBe(false);
   });

@@ -229,6 +229,9 @@ export type { StyledSearchProps } from "./components/StyledSearch";
 export { default as StyledInputToggle } from "./components/StyledInputToggle";
 export type { StyledInputToggleProps } from "./components/StyledInputToggle";
 
+export { default as StyledAlert } from "./components/StyledAlert";
+export type { StyledAlertProps, AlertStatus } from "./components/StyledAlert";
+
 export { default as StyledInputRadio } from "./components/StyledInputRadio";
 export type { StyledInputRadioProps, RadioItem, RadioVariant } from "./components/StyledInputRadio";
 export { RADIO_VARIANTS } from "./components/StyledInputRadio";

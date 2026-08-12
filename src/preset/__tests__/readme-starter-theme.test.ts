@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import {
-  emphasisTokenNames,
+  defaultedColorTokenNames,
   requiredCssCustomProperties,
 } from "../semantic-variables";
 
@@ -58,8 +58,19 @@ describe("the README's starter theme", () => {
       (m) => m[1]!,
     );
     const known = new Set(requiredCssCustomProperties());
-    // The emphasis tiers are legitimately optional, so a theme MAY define them.
-    for (const suffix of ["text-muted-text", "text-subtle-text"]) {
+    // The defaulted tokens are legitimately optional, so a theme MAY define
+    // them. Derived from the contract rather than listed, or this exemption
+    // goes stale every time a defaulted token is added.
+    for (const suffix of [
+      "text-muted-text",
+      "text-subtle-text",
+      "box-success-bg",
+      "box-warning-bg",
+      "box-error-bg",
+      "box-success-border",
+      "box-warning-border",
+      "box-error-border",
+    ]) {
       known.add(`--hopper-${suffix}`);
     }
     expect(declared.filter((p) => !known.has(p))).toEqual([]);
@@ -77,11 +88,18 @@ describe("the README's starter theme", () => {
     }
   });
 
-  it("tells a reader the emphasis tiers are NOT required", () => {
+  it("tells a reader the defaulted tokens are NOT required", () => {
     // The one thing a reader could get actively wrong from the section above:
-    // seeing two more colour tokens and assuming they must define them too.
-    expect(README).toContain("Two colour tokens you do NOT have to define");
-    for (const token of emphasisTokenNames()) {
+    // seeing eight more colour tokens and assuming they must define them too.
+    //
+    // The heading states the COUNT, so it goes stale the moment a defaulted
+    // token is added — which is exactly what happened when the status chips
+    // joined the emphasis tiers. Derived, not hardcoded.
+    const defaulted = defaultedColorTokenNames();
+    expect(README).toContain(
+      `${defaulted.length} colour tokens you do NOT have to define`,
+    );
+    for (const token of defaulted) {
       expect(README).toContain(token);
     }
   });

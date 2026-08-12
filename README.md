@@ -92,7 +92,7 @@ requiredCssCustomProperties();           // --hopper-* (default)
 requiredCssCustomProperties("optima");   // --optima-*, if you set cssVarPrefix
 ```
 
-### Two colour tokens you do NOT have to define
+### 8 colour tokens you do NOT have to define
 
 `textMuted` and `textSubtle` are the **emphasis** axis — how important a piece
 of text is, on whatever surface it sits. They are the one exception to the
@@ -113,6 +113,30 @@ they pair with, measured in a browser rather than chosen by eye.
 
 Define `--<prefix>-text-muted-text` / `--<prefix>-text-subtle-text` only if you
 want a different step.
+
+### ...and six more, for status
+
+`boxSuccess` / `boxWarning` / `boxError` and their `borderSuccess` /
+`borderWarning` / `borderError` are the chips `StyledAlert` paints on. They are
+defaulted for the same reason and a slightly different one: **danger-red,
+caution-amber and success-green are near-universal**, so a default is knowable
+where "what colour is this surface?" is not.
+
+The hue is fixed and the *lightness* is not, which is the split that matters —
+red has to stay red to mean danger, but how light that red sits has to follow
+the page:
+
+```css
+color-mix(in srgb, #dc2626 14%, transparent)   /* boxError    — tints the page */
+#dc2626                                        /* borderError — a solid hue    */
+```
+
+The borders are solid because a translucent one cannot clear WCAG 1.4.11 (3:1
+for a non-text boundary): at 45% they measured 1.72–2.05:1 against a dark page.
+A saturated mid-tone clears 3:1 at both ends, which is what lets one value serve
+a light theme and a dark one.
+
+Define `--<prefix>-box-{success,warning,error}-{bg,border}` to use your own.
 
 **Do not reach for `textSecondary` when you mean "muted".** That is the *surface*
 axis — it means "text on the secondary surface" — and using it for emphasis
