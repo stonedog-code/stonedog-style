@@ -80,24 +80,17 @@ const TEXTLESS_RECIPES = new Set([
 const INHERITS_BY_DESIGN = new Set(["glass"]);
 
 /**
- * A real offender that this guard deliberately does NOT fail on yet, because
- * the honest fix is blocked on something else.
+ * This file used to carry one deferral: `input-radio__item--variant_none`
+ * painted a hardcoded `white`, and pairing a THEME token against a FIXED
+ * surface would have swapped one legibility bug for another. The variant now
+ * paints `boxBgMain` with `textMain`, so the deferral is gone and the guard
+ * inspects that selector like any other.
  *
- * `input-radio__item--variant_none` paints a hardcoded `white` rather than a
- * token. Pairing a THEME token against a FIXED surface would swap one
- * legibility bug for another — `textPrimary` resolves light under a dark theme,
- * giving white on white. So the background has to stop being a literal first,
- * which is the inherited-literals cleanup NEH-441 scoped out and NEH-549
- * tracks.
- *
- * This entry is a deferral with a ticket, not a `KNOWN_DEAD` list: it names one
- * selector, says what unblocks it, and points at where that happens. If it ever
- * grows a second member without a matching issue, that is the signal this has
- * become the thing NEH-301 deleted.
+ * **Nothing replaces it.** A deferral list with no members is an invitation;
+ * the next literal background gets an entry instead of a fix, and that is the
+ * `KNOWN_DEAD` list NEH-301 deleted growing back. An exclusion below has to be
+ * a statement that inheriting is *correct*, not that a fix is pending.
  */
-const DEFERRED_PENDING_LITERAL_CLEANUP = new Map([
-  [".input-radio__item--variant_none", "NEH-549"],
-]);
 
 interface Rule {
   selector: string;
@@ -197,7 +190,6 @@ describe("a variant that paints a background states its text colour", () => {
 
     if (TEXTLESS_RECIPES.has(recipe)) continue;
     if (INHERITS_BY_DESIGN.has(variant)) continue;
-    if (DEFERRED_PENDING_LITERAL_CLEANUP.has(selector)) continue;
 
     if (PAINTS_NOTHING.test(bg)) continue;
     if (PAINTS_NOTHING_TOKEN.test(bg)) continue;
@@ -239,5 +231,15 @@ describe("a variant that paints a background states its text colour", () => {
 
     expect(backgroundBySelector.has(".box--variant_link")).toBe(true);
     expect(colourBySelector.has(".box--variant_link")).toBe(true);
+  });
+
+  it("paints input-radio's `none` variant from the theme, not from a literal", () => {
+    // The deferral this file used to carry (NEH-549). Named rather than left to
+    // the sweep above, because the sweep only asks whether a colour was stated
+    // — it would stay green if the background went back to `white` and a colour
+    // came with it, which is the white-on-white half of the same bug.
+    const selector = ".input-radio__item--variant_none";
+    expect(backgroundBySelector.get(selector)).toBe("var(--colors-box-bg-main)");
+    expect(colourBySelector.has(selector)).toBe(true);
   });
 });

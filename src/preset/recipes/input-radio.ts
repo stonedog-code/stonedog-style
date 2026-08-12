@@ -126,10 +126,20 @@ export const inputRadioRootRecipe = defineSlotRecipe({
           border: "none",
         },
       },
+      // "none" means no chrome, not no surface: it drops the border and sits
+      // the item on the page's own background. That was written as a literal
+      // `white`, which is the page background of exactly one theme — under a
+      // dark one it painted a white slab, and no theme-aware text colour could
+      // be paired with it (a light `textPrimary` on it is white-on-white, the
+      // same NEH-278 illegibility in the other direction). `boxBgMain` is the
+      // token that means "the page surface", so the variant now follows the
+      // theme instead of contradicting it, and `textMain` is its documented
+      // partner in TEXT_BACKGROUND_PAIRS.
       none: {
         item: {
           border: "none",
-          backgroundColor: "white",
+          backgroundColor: "boxBgMain",
+          color: "textMain",
         },
       },
     },
