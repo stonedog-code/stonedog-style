@@ -130,7 +130,7 @@ fi
 # two diverge exactly when a manifest change has just been pulled — which is
 # precisely when someone is about to publish.
 #
-# stonedog-howto 0.1.2 hit this (NEH-497). The checkout was clean, on main and
+# stonedog-howto 0.1.2 hit this, on 2026-08-07. The checkout was clean, on main and
 # current, so the script reported readiness in as many words — but `npm install`
 # had never run after the pull that renamed the style dependency. The old
 # unscoped package was still on disk and the scoped one absent, and Panda's
@@ -195,8 +195,8 @@ echo "  ($FILE_COUNT files total)"
 # ---------------------------------------------------------------------------
 # 6. Publish. npm prompts for the OTP here.
 #
-# `--access public` is explicit, and now belt-and-braces: the name is SCOPED as
-# of NEH-482, and a scoped package defaults to access: restricted. Publishing
+# `--access public` is explicit, and now belt-and-braces: the name is SCOPED,
+# and a scoped package defaults to access: restricted. Publishing
 # one privately succeeds, prints nothing unusual, and then 404s for every
 # consumer — indistinguishable from a package that was never published. So the
 # flag is here AND `publishConfig.access` is in package.json; being wrong about
