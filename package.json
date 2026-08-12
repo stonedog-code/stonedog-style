@@ -8,7 +8,7 @@
     "type": "git",
     "url": "git+https://github.com/stonedog-code/stonedog-style.git"
   },
-  "//publishConfig": "A SCOPED package defaults to access: restricted. Publishing one without this succeeds, prints nothing unusual, and then 404s for every consumer — which reads as a missing package rather than as a private one. It was not needed while the name was unscoped (those default to public), so it is new as of NEH-482 and it is the single thing most likely to be forgotten in a scope migration.",
+  "//publishConfig": "A SCOPED package defaults to access: restricted. Publishing one without this succeeds, prints nothing unusual, and then 404s for every consumer — which reads as a missing package rather than as a private one. It was not needed while the name was unscoped (those default to public), so it is new as of the scope migration and it is the single thing most likely to be forgotten in one.",
   "publishConfig": {
     "access": "public"
   },

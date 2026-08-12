@@ -579,7 +579,7 @@ rail simply grows — which is correct, and is not a bug.
 
 ## Adopting a component as it is migrated
 
-Components move out of HopperGuard into this package one at a time (NEH-167).
+Components move out of HopperGuard into this package one at a time.
 Each lands as its own release, so consumers adopt on their own schedule rather
 than waiting for a big-bang switch.
 
@@ -640,7 +640,7 @@ import { StyledSpinner } from "@stonedogcode/style";
 `optima-filings` is public and AGPLv3 and ships a public Docker image, so it
 uses a **permissive icon set** (Lucide) through the icon seam rather than the
 private Font Awesome package. Everything else is shared. Both Optima repos run
-their own `--optima-*` namespace via `cssVarPrefix` (NEH-170).
+their own `--optima-*` namespace via `cssVarPrefix`.
 
 ### Verify — the three checks that actually catch things
 
