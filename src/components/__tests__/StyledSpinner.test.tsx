@@ -90,14 +90,24 @@ describe("StyledSpinner", () => {
     });
   });
 
-  it("respects the app-wide font-size profile through StyledText", () => {
+  it("routes its load text through StyledText, so the profile can reach it", () => {
+    // This used to assert `toHaveStyle({ fontSize: "var(--font-sizes-xl, 2rem)" })`
+    // — a value that stopped being true when the scale moved to a conventional
+    // web baseline, and which the suite never noticed because the assertion
+    // cannot fail (NEH-406): jsdom drops a `var()` font-size, leaving no style
+    // attribute for the matcher to read.
+    //
+    // What jsdom CAN answer is whether the text goes through the component that
+    // knows about the profile at all — the wiring, not the pixels. The rendered
+    // size is measured in StyledSpinner.ct.tsx, in a browser that resolves the
+    // custom property.
     render(
       <StonedogStyleProvider fontSizeProfile="xl">
         <StyledSpinner loadText="Big" />
       </StonedogStyleProvider>,
     );
-    expect(screen.getByText("Big")).toHaveStyle({
-      fontSize: "var(--font-sizes-xl, 2rem)",
-    });
+    const text = screen.getByText("Big");
+    expect(text).toBeInTheDocument();
+    expect(text.className).toContain("text");
   });
 });

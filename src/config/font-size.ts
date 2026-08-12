@@ -63,6 +63,42 @@ export function getFontSizeLabel(size: string): string {
 }
 
 /**
+ * Which scale step a piece of text ends up at: caller → `fixedSize` → profile.
+ *
+ * The same precedence shape as `useResolvedVariant`, and here for the same
+ * reason — but it is a *pure function* rather than a branch inside `StyledText`
+ * specifically so the unit tier can assert it (NEH-406).
+ *
+ * That mattered more than it looks. The rule was only ever checked through a
+ * rendered `font-size`, and **jsdom cannot see one of these values at all**:
+ * every `fontSizeMap` entry is a `var(--font-sizes-*, …)` reference, jsdom's
+ * CSS parser rejects it against the `font-size` grammar, and the declaration is
+ * dropped — the element ends up with no `style` attribute whatsoever. So
+ * `toHaveStyle({ fontSize: <anything> })` compared "" with "" and passed for
+ * every possible expectation, including one asserting a size that had not been
+ * true since the scale moved.
+ *
+ * Splitting the rule out gives each tier a question it can actually answer:
+ * *which step wins* here, and *what does it measure* in the browser tier.
+ *
+ * `fixedSize` pins to `md` — used where a label must not grow with the profile,
+ * e.g. inside a fixed-height control it would otherwise clip.
+ */
+export function resolveFontSizeKey({
+  size,
+  fixedSize,
+  profile,
+}: {
+  size?: string | undefined;
+  fixedSize?: boolean | undefined;
+  profile?: string | undefined;
+}): string {
+  if (size) return size;
+  if (fixedSize) return "md";
+  return profile ?? "md";
+}
+
+/**
  * The literal fallback inside a `fontSizeMap` entry, e.g. `"1rem"`.
  *
  * Used where a real length is needed rather than a CSS reference — measuring,

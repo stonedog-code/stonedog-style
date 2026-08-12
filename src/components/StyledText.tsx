@@ -6,7 +6,7 @@ import { styled } from "styled-system/jsx";
 import { css, cx } from "styled-system/css";
 import StyledTooltip from "./StyledTooltip";
 import { useFontSizeProfile } from "../config/style-config";
-import { fontSizeMap } from "../config/font-size";
+import { fontSizeMap, resolveFontSizeKey } from "../config/font-size";
 import type { AllowedTextVariant } from "../config/types";
 import { textRecipe } from "styled-system/recipes";
 
@@ -114,15 +114,7 @@ const StyledText = React.forwardRef<HTMLSpanElement, StyledTextProps>((props, re
   } = props;
   const fontSizeProfile = useFontSizeProfile();
 
-  let finalSize;
-  if (size) {
-    finalSize = size;
-  } else if (fixedSize) {
-    finalSize = "md";
-  } else {
-    finalSize = fontSizeProfile;
-  }
-
+  const finalSize = resolveFontSizeKey({ size, fixedSize, profile: fontSizeProfile });
   const fontSize = fontSizeMap[finalSize] || fontSizeMap.md;
 
   const extraStyles: React.CSSProperties = {};
