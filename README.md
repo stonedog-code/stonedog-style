@@ -82,7 +82,8 @@ token reads one, and **a token whose property is undefined renders as nothing** 
 no fallback, no warning, no error. An app that skips this compiles, builds,
 serves, and shows you a blank page.
 
-There are **44** of them. Get the list at runtime rather than copying one:
+There are **45** of them. Get the list at runtime rather than copying one — a
+number in prose goes stale the day a token is added, and this one already had:
 
 ```ts
 import { requiredCssCustomProperties } from "@stonedogcode/style/preset";
@@ -91,7 +92,33 @@ requiredCssCustomProperties();           // --hopper-* (default)
 requiredCssCustomProperties("optima");   // --optima-*, if you set cssVarPrefix
 ```
 
-A complete starter theme — all 44, nothing elided. Dark, and every text/surface
+### Two colour tokens you do NOT have to define
+
+`textMuted` and `textSubtle` are the **emphasis** axis — how important a piece
+of text is, on whatever surface it sits. They are the one exception to the
+no-fallback rule above, and they are not in `requiredCssCustomProperties()`.
+
+They can have a default because *"like the surrounding text, but quieter"* has a
+correct answer on every theme, which *"what colour is this surface?"* does not:
+
+```css
+color-mix(in srgb, currentColor 78%, transparent)   /* textMuted  */
+color-mix(in srgb, currentColor 64%, transparent)   /* textSubtle */
+```
+
+`currentColor` inside a `color` declaration resolves to the **inherited** value,
+so both follow whatever text they sit among — light theme, dark theme, or a
+palette this package has never seen. Both clear WCAG AA against the surfaces
+they pair with, measured in a browser rather than chosen by eye.
+
+Define `--<prefix>-text-muted-text` / `--<prefix>-text-subtle-text` only if you
+want a different step.
+
+**Do not reach for `textSecondary` when you mean "muted".** That is the *surface*
+axis — it means "text on the secondary surface" — and using it for emphasis
+collapses two levels onto one colour.
+
+A complete starter theme — all 45, nothing elided. Dark, and every text/surface
 pair clears WCAG AA (measured: worst 5.17:1, ten of thirteen pairs at AAA), so
 it is a legitimate starting point rather than a placeholder. Replace the values;
 keep every key.
@@ -115,6 +142,7 @@ keep every key.
   --hopper-text-pop-text: #38bdf8;
   --hopper-text-error-text: #f87171;
   --hopper-text-warning-text: #fbbf24;
+  --hopper-text-success-text: #4ade80;
 
   /* Borders */
   --hopper-box-primary-border: #475569;
@@ -193,7 +221,7 @@ the three ways this goes wrong silently:
 ```bash
 npx panda cssgen --outfile styled-system/styles.css
 
-# 1. Did the preset load? Expect ~44 matches, not 0.
+# 1. Did the preset load? Expect ~45 matches, not 0.
 grep -c 'var(--hopper-' styled-system/styles.css
 
 # 2. Did Panda parse the package's source? Expect ~240 classes, not ~0.
@@ -278,7 +306,7 @@ stonedogStylePreset({ cssVarPrefix: "acme" }); // → var(--acme-box-primary-bg)
 
 The rename is total — every token re-points, and no `--hopper-*` reference
 survives anywhere in the generated CSS. Choose it **before** you write a theme,
-because it changes all 44 property names you have to define.
+because it changes all 45 property names you have to define.
 
 ## Adopting it in a new app — a worked example
 
@@ -361,7 +389,7 @@ export default defineConfig({
 
 ```tsx
 // 4. Your root — theme first, then the provider
-import "./theme.css";                 // the 44 properties, from step 3 above
+import "./theme.css";                 // the 45 properties, from step 3 above
 import { StonedogStyleProvider } from "@stonedogcode/style";
 
 export function Root({ children }) {

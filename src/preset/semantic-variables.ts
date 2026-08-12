@@ -55,6 +55,12 @@ const COLOR_TOKENS: TokenMap = {
 
   // Text on each surface. Pair these with the matching `boxBg*` — see
   // TEXT_BACKGROUND_PAIRS for which goes with which.
+  //
+  // These are a SURFACE axis, not an emphasis one. `textSecondary` means "text
+  // on the secondary surface"; it does not mean "less important text". Reading
+  // it as the latter is the mistake NEH-519 records — it collapses two
+  // different emphasis levels onto one colour and loses a distinction the UI
+  // meant to draw. De-emphasis is EMPHASIS_TOKENS below.
   textMain: "box-main-text",
   textPrimary: "box-primary-text",
   textSecondary: "box-secondary-text",
@@ -108,6 +114,59 @@ const COLOR_TOKENS: TokenMap = {
   iconBgPrimaryHover: "icon-primary-hover-bg",
   iconBgSecondaryHover: "icon-secondary-hover-bg",
   iconBgAccentHover: "icon-accent-hover-bg",
+};
+
+/**
+ * The emphasis axis: how important this text is, on whatever surface it sits.
+ *
+ * The contract had no such axis (NEH-519). It has a *surface* axis — `textMain`
+ * on `boxBgMain`, `textSecondary` on `boxBgSecondary` — and consumers reached
+ * for `textSecondary` when they meant "muted", which is a different question
+ * with a different answer. HopperGuard had a stepper wanting three levels at
+ * once:
+ *
+ * ```tsx
+ * color={active ? "fg" : done ? "fg.muted" : "fg.subtle"}
+ * ```
+ *
+ * and the mapping collapsed "done" and "upcoming" onto one colour, losing a
+ * distinction that UI was drawing on purpose.
+ *
+ * ## The default is relative, which is what makes these adoptable
+ *
+ * Every other colour token is fallback-free by design: an undefined colour
+ * paints an invisible element, a louder and earlier bug than a wrong shade.
+ * That rule is right where "what colour is this?" has no answer without a
+ * theme.
+ *
+ * Emphasis is not that question. "Like the surrounding text, but quieter" has a
+ * correct answer on *every* theme, and `color-mix` states it directly:
+ * `currentColor` inside a `color` declaration resolves to the INHERITED colour
+ * (the property being computed is `color` itself), so the default de-emphasises
+ * whatever the text around it already is — light theme, dark theme, or a host
+ * palette nobody has seen.
+ *
+ * So these follow the font tokens' shape rather than the colours': they carry a
+ * fallback and stay OUT of `requiredCssCustomProperties()`. Putting them there
+ * would fail every existing host for no safety gain, and would move the
+ * `required === fallback-free colours` identity the contract test pins on both
+ * sides. This is the owner direction recorded on NEH-421 — a new token ships
+ * with a sensible default so every project can adopt it immediately — applied
+ * to the case where a default is genuinely knowable.
+ *
+ * ## The percentages are measured, not chosen
+ *
+ * Alpha de-emphasis trades contrast for hierarchy, and past some point it
+ * trades away legibility. `emphasis-contrast.ct.tsx` measures both tiers
+ * against the harness theme in a real browser and asserts they clear WCAG AA
+ * (4.5:1); the values below are what passed. A host that wants a stronger or
+ * weaker step defines the property.
+ */
+const EMPHASIS_TOKENS: Record<string, [suffix: string, fallback: string]> = {
+  /** Secondary information: still read, just not first. */
+  textMuted: ["text-muted-text", "color-mix(in srgb, currentColor 78%, transparent)"],
+  /** Furthest back — hints, placeholders, a step not yet reached. */
+  textSubtle: ["text-subtle-text", "color-mix(in srgb, currentColor 64%, transparent)"],
 };
 
 /**
@@ -266,9 +325,14 @@ export function getBackgroundForText(textToken: string): string | undefined {
   return TEXT_BACKGROUND_PAIRS[textToken];
 }
 
-/** Every Panda colour token this preset defines. */
+/** Every Panda colour token this preset defines, emphasis tiers included. */
 export function colorTokenNames(): string[] {
-  return Object.keys(COLOR_TOKENS);
+  return [...Object.keys(COLOR_TOKENS), ...Object.keys(EMPHASIS_TOKENS)];
+}
+
+/** The de-emphasis tiers, which carry a fallback and are not required of a host. */
+export function emphasisTokenNames(): string[] {
+  return Object.keys(EMPHASIS_TOKENS);
 }
 
 /**
@@ -283,14 +347,24 @@ export function requiredCssCustomProperties(
   return Object.values(COLOR_TOKENS).map((suffix) => `--${prefix}-${suffix}`);
 }
 
-/** Panda colour-token definitions, bound to a custom-property prefix. */
+/**
+ * Panda colour-token definitions, bound to a custom-property prefix.
+ *
+ * Two shapes in one map, deliberately: the surface and meaning colours emit a
+ * bare `var(…)` with no fallback, and the emphasis tiers emit
+ * `var(…, <default>)`. See `COLOR_TOKENS` and `EMPHASIS_TOKENS` for why the
+ * asymmetry is correct rather than an oversight.
+ */
 export function createSemanticColors(
   prefix: string = DEFAULT_CSS_VAR_PREFIX,
 ): Record<string, { value: string }> {
-  return Object.fromEntries(
-    Object.entries(COLOR_TOKENS).map(([token, suffix]) => [
-      token,
-      { value: `var(--${prefix}-${suffix})` },
-    ]),
-  );
+  return {
+    ...Object.fromEntries(
+      Object.entries(COLOR_TOKENS).map(([token, suffix]) => [
+        token,
+        { value: `var(--${prefix}-${suffix})` },
+      ]),
+    ),
+    ...createFallbackTokens(EMPHASIS_TOKENS, prefix),
+  };
 }
