@@ -581,6 +581,42 @@ properties verified to paint** — for a checkbox that is `accent-color`,
 `box-shadow` and `outline` — and check a screenshot before believing a variant
 reaches anyone.
 
+### `border-radius` is worse than discarded: it does not compute (NEH-310)
+
+Separated out because the distinction changes what a test can even ask.
+`background-color` is computed-but-not-painted. **`border-radius` on a checkbox
+at `appearance: auto` reports `0px` whatever the stylesheet says** — probed in
+the harness with a control set to `9999px` next to a `<span>` set to `12px`; the
+span reported `12px`, the checkbox `0px`.
+
+Two consequences:
+
+- **No variant of this control can differ by corner**, so do not try. NEH-234's
+  fix believed otherwise: it gave `outline` `borderRadius: "0"` and its comment
+  claimed the ring was "squared to match". Half of that fix was inert from the
+  day it landed, and the comment asserted a difference nobody could see.
+- **It is not even assertable.** A test including `borderRadius` in a per-variant
+  signature adds a column that is constant by construction — noise that reads as
+  coverage.
+
+The generalisation, and the reason this keeps recurring on this one control:
+**"the UA discards it" and "the UA does not compute it" are different failures,
+and only the second is detectable from a test.** For the first, the only honest
+check is a screenshot.
+
+### A recipe variant no component can select is dead surface
+
+`inputBoolRecipe` defines a `button` variant. `StyledInputBool` deliberately
+omits it from `INPUT_BOOL_VARIANTS` — it restyles the checkbox as a push button,
+which is a different control rather than a different appearance — so
+`useResolvedVariant` narrows it to `solid` and **nothing can render it**.
+
+That is a defensible decision and it is documented at the constant, but the
+consequence is easy to trip over: `variant="button"` does not type-check, and if
+you reach past the type it silently renders `solid`. Anyone measuring "do the
+variants differ" must measure the seven the component exposes, not the eight the
+recipe defines. NEH-310 left `button` alone for that reason.
+
 ## Type comes from the theme, shape stays here (NEH-289)
 
 `fontFamily` and `fontWeight` tokens read `--<prefix>-font-family-*` and

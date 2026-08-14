@@ -124,6 +124,167 @@ test.describe("StyledInputBool", () => {
     expect(await ring("outline")).toContain("rgb(71, 85, 105)");
   });
 
+  /**
+   * NEH-310 — the generalisation of the test above, and the one that would
+   * have caught this defect the first time.
+   *
+   * NEH-234 fixed `solid` vs `outline` and asserted exactly that pair. The
+   * other six went on differing only in `background`, `background-image`,
+   * `color` and a pseudo-element — every one discarded by a native checkbox —
+   * so six of the eight appearances rendered identically and a pairwise test
+   * could not see it.
+   *
+   * This asserts the property that actually matters: **no two variants paint
+   * the same.** It fails on the pre-fix recipe with six collisions, and it
+   * cannot be satisfied by adding another invisible declaration.
+   */
+  /**
+   * Written out rather than imported from `INPUT_BOOL_VARIANTS`, which is what
+   * you would reach for first.
+   *
+   * Playwright CT rewrites imports from a component module into mount
+   * references, so pulling a plain constant out of `StyledInputBool.tsx`
+   * alongside the default import fails at build with
+   * `Identifier 'StyledInputBool' has already been declared`.
+   *
+   * The drift that copy invites is closed on the jest side instead:
+   * `StyledInputBool.test.tsx` asserts this list equals `INPUT_BOOL_VARIANTS`,
+   * so adding a variant without extending this one fails there.
+   *
+   * Seven, not eight: the recipe also defines `button`, which the component
+   * deliberately omits — see the comment on that constant.
+   */
+  const VARIANTS = [
+    "solid",
+    "outline",
+    "aurora",
+    "glass",
+    "matte",
+    "ghost",
+    "none",
+  ] as const;
+
+  /**
+   * `solid` and `none` are expected to be EQUAL, and that is the honest answer
+   * rather than a gap.
+   *
+   * Every lever this control has is additive — a ring, a halo, a checked
+   * colour. `none` means "do not style this", so its only honest rendering is
+   * the bare widget, which is exactly what `solid` is. Giving `none` a ring to
+   * make a distinctness test pass would leave the variant named `none` as the
+   * only one wearing decoration.
+   *
+   * Asserted as an equality below rather than skipped, so that if the
+   * `appearance: none` redesign (option 2 on NEH-310) ever makes them
+   * separable, this fails and asks for the pair to be re-judged.
+   */
+  const CONVERGENT: ReadonlyArray<readonly [string, string]> = [
+    ["solid", "none"],
+  ];
+
+  test("no two variants render identically, except the documented pair", async ({
+    mount,
+  }) => {
+    const component = await mount(
+      <>
+        {VARIANTS.map((v) => (
+          <StyledInputBool key={v} label={v} variant={v} data-testid={v} />
+        ))}
+      </>,
+    );
+
+    // Only properties the widget was verified to PAINT. `background-color` and
+    // `border-*` are excluded on purpose: Chromium computes them and paints
+    // neither, so including them would make this pass against the very defect
+    // it exists to catch — which is how the original survived for months.
+    //
+    // `border-radius` is excluded for a stronger reason than that: on this
+    // control it does not even compute (NEH-310). It reports `0px` for every
+    // variant whatever the stylesheet says, so including it would add a column
+    // that is constant by construction — noise that looks like coverage.
+    const signature = (testId: string) =>
+      component.getByTestId(testId).evaluate((el) => {
+        const s = getComputedStyle(el);
+        return `${s.boxShadow} | ${s.accentColor}`;
+      });
+
+    const expectedEqual = (a: string, b: string) =>
+      CONVERGENT.some(
+        ([x, y]) => (x === a && y === b) || (x === b && y === a),
+      );
+
+    const seen = new Map<string, string>();
+    for (const variant of VARIANTS) {
+      const sig = await signature(variant);
+      const collision = seen.get(sig);
+      if (collision !== undefined && expectedEqual(collision, variant)) continue;
+      expect(
+        collision,
+        `"${variant}" paints identically to "${collision}" — both are ${sig}`,
+      ).toBeUndefined();
+      seen.set(sig, variant);
+    }
+
+    // Six distinct renderings across seven variants, the one repeat being the
+    // documented `solid` / `none` convergence.
+    expect(seen.size).toBe(VARIANTS.length - CONVERGENT.length);
+  });
+
+  test("the convergent pair really is convergent", async ({ mount }) => {
+    // The other direction. Without this, `CONVERGENT` is an unchecked excuse
+    // list: a future variant that accidentally collided with `solid` could be
+    // added to it and the suite would stay green. This asserts the pair is
+    // equal, so the entry has to be earned.
+    const component = await mount(
+      <>
+        <StyledInputBool label="solid" variant="solid" data-testid="solid" />
+        <StyledInputBool label="none" variant="none" data-testid="none" />
+      </>,
+    );
+
+    const paint = (testId: string) =>
+      component.getByTestId(testId).evaluate((el) => {
+        const s = getComputedStyle(el);
+        return `${s.boxShadow} | ${s.accentColor}`;
+      });
+
+    expect(await paint("solid")).toBe(await paint("none"));
+  });
+
+  test("every variant keeps the checked state legible", async ({ mount }) => {
+    // The constraint that shapes the whole fix. Distinguishing an appearance
+    // must not cost state legibility — `outline` learned this when a recessive
+    // `accentColor` made a ticked box dark-on-dark, which is the one state the
+    // control exists to communicate. So appearance is carried by the ring, and
+    // every variant keeps the same checked colour.
+    const component = await mount(
+      <>
+        {VARIANTS.map((v) => (
+          <StyledInputBool
+            key={v}
+            label={v}
+            variant={v}
+            defaultChecked
+            data-testid={v}
+          />
+        ))}
+      </>,
+    );
+
+    const accents = new Set<string>();
+    for (const variant of VARIANTS) {
+      const accent = await component
+        .getByTestId(variant)
+        .evaluate((el) => getComputedStyle(el).accentColor);
+      expect(accent, `"${variant}" accent-color`).not.toBe("auto");
+      accents.add(accent);
+    }
+
+    // One colour across all eight. If this ever legitimately grows, the ring
+    // rule above has to be revisited rather than this loosened.
+    expect(accents.size).toBe(1);
+  });
+
   test("the checked state is themed rather than the browser's default blue", async ({
     mount,
   }) => {
