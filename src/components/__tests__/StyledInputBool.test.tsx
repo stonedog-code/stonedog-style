@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import StyledInputBool from "../StyledInputBool";
+import StyledInputBool, { INPUT_BOOL_VARIANTS } from "../StyledInputBool";
 import { StonedogStyleProvider } from "../../config/style-config";
 
 describe("StyledInputBool", () => {
@@ -130,5 +132,33 @@ describe("StyledInputBool", () => {
         classOf(<StyledInputBool label="explicit" variant="solid" />),
       );
     });
+  });
+
+  /**
+   * Keeps `StyledInputBool.ct.tsx`'s copy of the variant list honest.
+   *
+   * That spec has to write the seven names out rather than importing this
+   * constant: Playwright CT rewrites imports from a component module into
+   * mount references, so pulling a plain value out of `StyledInputBool.tsx`
+   * alongside the default import fails at build with
+   * `Identifier 'StyledInputBool' has already been declared`.
+   *
+   * A hand-copied list is exactly the thing that goes stale, and the failure
+   * would be silent in the worst way — the NEH-310 distinctness check would
+   * simply stop covering whichever variant was added. Jest has no such import
+   * restriction, so the drift is caught here instead.
+   */
+  it("the component-test spec's variant list is still complete (NEH-310)", () => {
+    const inCtSpec = readFileSync(
+      join(__dirname, "..", "StyledInputBool.ct.tsx"),
+      "utf8",
+    );
+    const declared = inCtSpec.match(/const VARIANTS = \[([\s\S]*?)\] as const;/);
+    // No message argument: jest's `expect` takes exactly one, unlike
+    // Playwright's. A second one throws rather than annotating the failure.
+    expect(declared).not.toBeNull();
+
+    const listed = [...declared![1]!.matchAll(/"([a-z]+)"/g)].map((m) => m[1]);
+    expect(listed.sort()).toEqual([...INPUT_BOOL_VARIANTS].sort());
   });
 });
