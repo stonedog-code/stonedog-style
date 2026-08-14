@@ -5,6 +5,7 @@ import type { DensityProfile, FontSizeProfile, IconSize, ThemeVariant } from "./
 import { resolveDensityStep, type DensityBase, type DensityStep } from "./density";
 import { THEME_VARIANTS } from "./types";
 import { IntentIconProvider, type IntentIcons } from "./intent-icons";
+import { DefaultLinkComponent, type LinkComponent } from "./link-component";
 
 /**
  * Everything this component library needs to know about the host application.
@@ -69,6 +70,26 @@ export interface StyleConfig {
    * (a business tool for a general audience) sets `"md"`.
    */
   iconSize: IconSize;
+
+  /**
+   * What `StyledLink` renders for an in-app destination (NEH-430).
+   *
+   * This is a seam, not a dependency. `StyledLink` used to import `next/link`
+   * directly, which is why it could not live in this package at all — CLAUDE.md
+   * names `next/*` as forbidden, and three products with three framework
+   * choices cannot be made to share one.
+   *
+   * The default is a plain `<a>`: a real, working, accessible link, not a
+   * placeholder. A host passes its router's component to gain client-side
+   * navigation and prefetching, and gains nothing else — so an unconfigured
+   * host is not broken, merely un-optimised.
+   *
+   * Note this is the only field here whose value is a *component*. It sits on
+   * `StyleConfig` rather than being a `StyledLink` prop because the choice is
+   * app-wide by nature: passing it per call site is how ~40 links end up with
+   * two navigation behaviours and no way to retune either.
+   */
+  linkComponent: LinkComponent;
 }
 
 /**
@@ -91,6 +112,10 @@ export const DEFAULT_STYLE_CONFIG: StyleConfig = {
   // what the originating application already renders. Changing it would be an
   // invisible, app-wide visual change to every existing consumer.
   iconSize: "2x",
+  // A plain anchor. Unlike `iconSize` above this is genuinely the safe middle:
+  // it navigates correctly everywhere, and a host overriding it is opting into
+  // an improvement rather than repairing a default.
+  linkComponent: DefaultLinkComponent,
 };
 
 const StyleConfigContext = createContext<StyleConfig>(DEFAULT_STYLE_CONFIG);
@@ -143,6 +168,7 @@ export function StonedogStyleProvider({
   iconSize,
   density,
   densityBase,
+  linkComponent,
   icons,
 }: StonedogStyleProviderProps) {
   const value = useMemo<StyleConfig>(
@@ -153,8 +179,9 @@ export function StonedogStyleProvider({
       iconSize: iconSize ?? DEFAULT_STYLE_CONFIG.iconSize,
       density: density ?? DEFAULT_STYLE_CONFIG.density,
       densityBase: densityBase ?? DEFAULT_STYLE_CONFIG.densityBase,
+      linkComponent: linkComponent ?? DEFAULT_STYLE_CONFIG.linkComponent,
     }),
-    [fontSizeProfile, variant, iconSize, density, densityBase],
+    [fontSizeProfile, variant, iconSize, density, densityBase, linkComponent],
   );
 
   return (
@@ -194,6 +221,17 @@ export function useFontSizeProfile(): FontSizeProfile {
 /** The app-wide default icon size. `StyledIcon` uses it when given no `size`. */
 export function useIconSize(): IconSize {
   return useStyleConfig().iconSize;
+}
+
+/**
+ * The host's link implementation, or a plain `<a>` if it supplied none.
+ *
+ * Exported so an application component outside this package can render a link
+ * the same way `StyledLink` does, without reaching for the router directly and
+ * re-creating the coupling the seam removed.
+ */
+export function useLinkComponent(): LinkComponent {
+  return useStyleConfig().linkComponent;
 }
 
 /**

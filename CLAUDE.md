@@ -413,6 +413,46 @@ runtime switching needs.
 - **Application concepts.** No auth, no data fetching, no routing, no
   `next/*` imports. A component that fetches is a feature, not a primitive.
 
+### The way past a forbidden dependency is a seam with a WORKING default (NEH-430)
+
+Several components could not live here because each imported something the
+package will not take — `next/link`, `next/navigation`, `zod`, `@ark-ui/react`,
+`js-confetti`. The answer is not to relax the list and not to leave them in the
+app. It is the pattern `StyledIcon` and `Dictation` already established: **the
+package defines the shape, ships a zero-dependency default, and the host swaps
+in its own.**
+
+The load-bearing word is *working*. The default must be genuinely usable, not a
+placeholder that throws, warns, or renders nothing until configured — a seam
+whose default is broken is a required configuration step wearing a disguise, and
+it recreates the adoption deadlock the seam was for. `StyledLink` unconfigured
+renders a plain `<a>`: it navigates, middle-click works, a screen reader
+announces it. A host passes `next/link` to gain client-side navigation and
+prefetching, and gains nothing that the link needed in order to *work*.
+
+The other half: **do not let the seam leak the host's concept back in.**
+`LinkComponentProps.href` is a `string`, not `string | UrlObject` — naming the
+Next.js type would put it in a package whose premise is that it has none. A host
+wanting the object form wraps its own component, which is what the seam is for.
+
+`linkComponent` is on `StyleConfig` rather than being a `StyledLink` prop
+because the choice is app-wide by nature; per-call-site is how ~40 links end up
+with two navigation behaviours. That does make it the **first `StyleConfig`
+field whose value is a component**, and it is still subject to the rule above
+it — it is defaulted, so no host must supply it to render.
+
+Two things about `LinkComponent`'s type that are deliberate:
+
+- **`RefAttributes` is in the props type.** The peer range starts at React 18,
+  where a `ref` handed to a plain function component is dropped with a console
+  warning rather than forwarded. Stating it makes that a compile error for the
+  host instead of a warning nobody reads.
+- **The intrinsic `"a"` string is not assignable.** One way to say a thing, and
+  the string form cannot be wrapped or given a `displayName`.
+
+Still to do under NEH-430: `StyledPage` (`next/navigation`), `StyledForm` /
+`StyledFormDialog` (`zod`) and `StyledConfetti` (`js-confetti`).
+
 ## Token compliance — the defect class this package keeps catching
 
 Three separate bugs found during extraction shared one root cause: **a recipe
