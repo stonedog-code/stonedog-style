@@ -218,6 +218,22 @@ export type {
   FieldError,
 } from "./components/StyledFieldErrors";
 
+export { default as StyledPage, StyledPage as Page } from "./components/StyledPage";
+export type { StyledPageProps } from "./components/StyledPage";
+
+export { default as StyledForm, StyledForm as Form } from "./components/StyledForm";
+export type { StyledFormProps } from "./components/StyledForm";
+
+export {
+  default as StyledConfetti,
+  StyledConfetti as Confetti,
+} from "./components/StyledConfetti";
+export type {
+  StyledConfettiProps,
+  CelebrateFn,
+  CelebrateOptions,
+} from "./components/StyledConfetti";
+
 export { default as StyledInputBool } from "./components/StyledInputBool";
 export type { StyledInputBoolProps, InputBoolVariant } from "./components/StyledInputBool";
 export { INPUT_BOOL_VARIANTS } from "./components/StyledInputBool";

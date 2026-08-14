@@ -195,6 +195,34 @@ export function stonedogStylePreset(options: StonedogStylePresetOptions = {}) {
             "0%": { transform: "scaleX(0)" },
             "100%": { transform: "scaleX(1)" },
           },
+          /**
+           * One confetti particle's flight — `StyledConfetti`'s zero-dependency
+           * default (NEH-430).
+           *
+           * The three `--sd-confetti-*` properties are set inline, per
+           * particle, so one keyframe serves a whole burst travelling in every
+           * direction. A keyframe cannot randomise, and a hundred generated
+           * keyframes would be a hundred rules in every consumer's stylesheet.
+           *
+           * **These are NOT the theme namespace and must not be confused with
+           * it.** CLAUDE.md's rule — never write `var(--…)` for anything the
+           * HOST supplies — is about `--<prefix>-*` properties that a theme
+           * defines and `cssVarPrefix` re-points. These are component-internal,
+           * written and read in the same breath by the same component, and
+           * named `--sd-confetti-*` precisely so they cannot collide with a
+           * host's namespace. The particle's COLOUR still comes from a token.
+           */
+          stonedogConfettiBurst: {
+            "0%": {
+              transform: "translate3d(0, 0, 0) rotate(0deg)",
+              opacity: "1",
+            },
+            "100%": {
+              transform:
+                "translate3d(var(--sd-confetti-dx, 0), var(--sd-confetti-dy, 0), 0) rotate(var(--sd-confetti-rot, 0deg))",
+              opacity: "0",
+            },
+          },
         },
         recipes,
       },
