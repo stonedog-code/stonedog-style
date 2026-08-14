@@ -2,7 +2,7 @@
 
 import React from "react";
 import { buttonRecipe } from "styled-system/recipes";
-import { cx } from "styled-system/css";
+import { css, cx } from "styled-system/css";
 import { useLinkComponent, useResolvedVariant } from "../config/style-config";
 import { ALL_VARIANTS } from "../config/types";
 
@@ -55,6 +55,23 @@ export interface StyledLinkProps
    */
   externalIndicator?: React.ReactNode;
   variant?: string;
+  /**
+   * Render as a standalone control with a 48x48 tap target, rather than as
+   * text inside a sentence.
+   *
+   * **The default is inline, and that is deliberate rather than a shortcut.**
+   * `buttonRecipe`'s base states `min-height: 48px`, `display: inline-flex`
+   * and padding — correct for a control, and wrong for a link in a paragraph,
+   * where it forces a 48px line box and breaks the text flow. Measured at
+   * 48.375px before this prop existed.
+   *
+   * Inline is also what the standard expects: WCAG 2.5.5 and 2.5.8 both carve
+   * out targets that are "in a sentence or block of text", so a text link at
+   * text height is conformant. The floor applies to the standalone case, and
+   * `standalone` is how a nav item, a card action or a button-shaped link asks
+   * for it.
+   */
+  standalone?: boolean;
 }
 
 /** The default external-destination glyph — "↗", north-east arrow. */
@@ -83,6 +100,7 @@ export const StyledLink = React.forwardRef<HTMLAnchorElement, StyledLinkProps>(
       rightIcon,
       externalIndicator,
       variant,
+      standalone = false,
       className,
       ...rest
     },
@@ -90,7 +108,22 @@ export const StyledLink = React.forwardRef<HTMLAnchorElement, StyledLinkProps>(
   ) {
     const HostLink = useLinkComponent();
     const resolved = useResolvedVariant(variant ?? "link", LINK_VARIANTS);
-    const classes = cx(buttonRecipe({ variant: resolved }), className);
+    // The variant still comes from `buttonRecipe`, so colour, underline and
+    // hover stay one definition shared with every other control. Only the BOX
+    // is overridden, and only when inline — the three properties that make a
+    // control a control are exactly the three that break a sentence.
+    const classes = cx(
+      buttonRecipe({ variant: resolved }),
+      standalone
+        ? undefined
+        : css({
+            display: "inline",
+            minHeight: "0",
+            minWidth: "0",
+            padding: "0",
+          }),
+      className,
+    );
 
     const indicator =
       externalIndicator === undefined ? EXTERNAL_GLYPH : externalIndicator;
