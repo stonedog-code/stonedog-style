@@ -450,8 +450,25 @@ Two things about `LinkComponent`'s type that are deliberate:
 - **The intrinsic `"a"` string is not assignable.** One way to say a thing, and
   the string form cannot be wrapped or given a `displayName`.
 
-Still to do under NEH-430: `StyledPage` (`next/navigation`), `StyledForm` /
-`StyledFormDialog` (`zod`) and `StyledConfetti` (`js-confetti`).
+**Not every forbidden import turns out to need a seam.** `StyledPage` imported
+`next/navigation` for exactly one thing: `router.back()`, as the default
+Cancel. A router's `back()` *is* session history, so `window.history.back()` is
+the same operation reached directly — not a degraded stand-in. It therefore got
+**no seam and no `StyleConfig` field**. Read what the import is actually used
+for before designing a way to inject it; the answer here was three lines into
+the file.
+
+`StyledForm` was the same shape one layer along: its `zod` dependency was only
+the TYPE on its `zodErrors` prop, so `FieldError[]` removed it with no seam
+either.
+
+Still to do under NEH-430: **`StyledFormDialog`**, and it is blocked on
+something the issue never listed. Its stated blocker is `zod`, which is now
+trivial — but it is built on `StyledDialog`, which is 464 lines and imports
+**`framer-motion`**, a fifth forbidden dependency. So `StyledDialog` has to be
+extracted first, and that is its own piece of work (NEH-242 tracks dropping
+framer-motion in HopperGuard). Do not start `StyledFormDialog` expecting the
+zod change to be the job.
 
 ## Token compliance — the defect class this package keeps catching
 
