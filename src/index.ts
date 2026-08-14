@@ -20,6 +20,7 @@ export {
   useStyleConfig,
   useFontSizeProfile,
   useIconSize,
+  useLinkComponent,
   useResolvedVariant,
   DEFAULT_STYLE_CONFIG,
 } from "./config/style-config";
@@ -27,6 +28,10 @@ export type {
   StyleConfig,
   StonedogStyleProviderProps,
 } from "./config/style-config";
+
+/** The link seam — see `config/link-component.tsx` and NEH-430. */
+export { DefaultLinkComponent } from "./config/link-component";
+export type { LinkComponent, LinkComponentProps } from "./config/link-component";
 
 /**
  * Deprecated `Hopper*` aliases — NEH-251. See `config/style-config.tsx`.
@@ -191,6 +196,27 @@ export type { StyledTooltipProps } from "./components/StyledTooltip";
 // ---------------------------------------------------------------------------
 export { default as StyledFormLabel } from "./components/StyledFormLabel";
 export type { StyledFormLabelProps } from "./components/StyledFormLabel";
+
+// ---------------------------------------------------------------------------
+// Components that were blocked on a runtime dependency until NEH-430 gave each
+// a seam with a working default. None of them adds a dependency; the host
+// supplies the framework-specific half, or takes the default and loses nothing
+// that stops it working.
+// ---------------------------------------------------------------------------
+export { default as StyledLink, StyledLink as Link } from "./components/StyledLink";
+export type { StyledLinkProps } from "./components/StyledLink";
+
+export { default as StyledTag, StyledTag as Tag } from "./components/StyledTag";
+export type { StyledTagProps } from "./components/StyledTag";
+
+export {
+  default as StyledFieldErrors,
+  StyledFieldErrors as FieldErrors,
+} from "./components/StyledFieldErrors";
+export type {
+  StyledFieldErrorsProps,
+  FieldError,
+} from "./components/StyledFieldErrors";
 
 export { default as StyledInputBool } from "./components/StyledInputBool";
 export type { StyledInputBoolProps, InputBoolVariant } from "./components/StyledInputBool";
