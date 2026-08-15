@@ -17,6 +17,15 @@ import { ALL_VARIANTS } from "../config/types";
  */
 const LINK_VARIANTS = ALL_VARIANTS;
 
+/**
+ * How a link sits in its surroundings.
+ *
+ * `text` is the default and the safe one: a link in a sentence must not become
+ * a 48px control. `flow` is the layout participant. `control` is the tap
+ * target, and carries the house 48px floor.
+ */
+export type LinkPresentation = "text" | "flow" | "control";
+
 export interface StyledLinkProps
   extends Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href"> {
   /** Where the link goes. */
@@ -70,8 +79,46 @@ export interface StyledLinkProps
    * text height is conformant. The floor applies to the standalone case, and
    * `standalone` is how a nav item, a card action or a button-shaped link asks
    * for it.
+   *
+   * @deprecated Use `presentation` instead — `standalone` maps to
+   * `presentation="control"`. It is kept because it is public API and consumers
+   * pass it today; it will be removed once they have moved.
    */
   standalone?: boolean;
+  /**
+   * How the link sits in its surroundings. Three cases, because there are
+   * genuinely three (NEH-728).
+   *
+   * | | display | min-height | for |
+   * |---|---|---|---|
+   * | `text` (default) | `inline` | none | a link inside a sentence |
+   * | `flow` | `inline-flex` | none | a link that is a layout participant |
+   * | `control` | `inline-flex` | **48px** | a nav item, a card action |
+   *
+   * ## Why `flow` had to exist
+   *
+   * `text` and `control` look like they cover the space, and they do not. A
+   * link that is neither prose nor a tap target is extremely common — a row in
+   * a list, a cell in a grid, anything given a width by its parent — and
+   * HopperGuard had 67 of them (NEH-728).
+   *
+   * Neither of the other two can express it, and **both fail silently**:
+   *
+   * - `control` adds the 48px floor to links that are not tap targets, which
+   *   changes layout everywhere it is wrong.
+   * - `text` sets `display: inline`, and on a non-replaced inline box **`width`
+   *   does not apply** and **`margin-left: auto` does nothing** — so a `w` prop
+   *   becomes a no-op and a right-hand icon loses its push-to-end. No build
+   *   error, no type error, no warning; the link just renders wrong.
+   *
+   * `flow` is inline-flex without the floor: it takes a width, it lays its
+   * icons out, and it does not claim to be a 48px target when it is not.
+   *
+   * **Do not reach for `flow` to escape the tap-target floor on something that
+   * IS a control.** The floor is a house minimum, not a default to be routed
+   * around; `control` is the honest answer for anything a finger aims at.
+   */
+  presentation?: LinkPresentation;
 }
 
 /** The default external-destination glyph — "↗", north-east arrow. */
@@ -101,6 +148,7 @@ export const StyledLink = React.forwardRef<HTMLAnchorElement, StyledLinkProps>(
       externalIndicator,
       variant,
       standalone = false,
+      presentation,
       className,
       ...rest
     },
@@ -108,16 +156,32 @@ export const StyledLink = React.forwardRef<HTMLAnchorElement, StyledLinkProps>(
   ) {
     const HostLink = useLinkComponent();
     const resolved = useResolvedVariant(variant ?? "link", LINK_VARIANTS);
+
+    /*
+     * `presentation` wins; `standalone` is the deprecated spelling of
+     * `control`. Resolved in one place so there is no call site where the two
+     * disagree and the answer depends on which branch is read first.
+     */
+    const mode: LinkPresentation =
+      presentation ?? (standalone ? "control" : "text");
+
     // The variant still comes from `buttonRecipe`, so colour, underline and
     // hover stay one definition shared with every other control. Only the BOX
-    // is overridden, and only when inline — the three properties that make a
-    // control a control are exactly the three that break a sentence.
+    // is overridden — the properties that make a control a control are exactly
+    // the ones that break a sentence.
     const classes = cx(
       buttonRecipe({ variant: resolved }),
-      standalone
+      mode === "control"
         ? undefined
         : css({
-            display: "inline",
+            /*
+             * `text` goes fully inline so it sits in a line box like any other
+             * word. `flow` stays a flex container: it is a layout participant,
+             * and on a non-replaced inline box `width` does not apply and
+             * `margin-left: auto` does nothing — so an inline `flow` would
+             * silently drop both (NEH-728).
+             */
+            display: mode === "flow" ? "inline-flex" : "inline",
             minHeight: "0",
             minWidth: "0",
             padding: "0",

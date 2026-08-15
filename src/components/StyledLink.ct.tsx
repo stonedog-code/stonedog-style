@@ -98,3 +98,118 @@ test("both keep the link variant's underline, so only the BOX differs", async ({
   expect(await decoration("a")).toBe("underline");
   expect(await decoration("b")).toBe("underline");
 });
+
+/**
+ * `flow` — the third presentation (NEH-728).
+ *
+ * These are the two claims that justify its existence, and **neither is
+ * assertable in jsdom**: both are questions about what a real layout engine
+ * does with a `display` value, and jsdom reports every box as 0×0.
+ *
+ * The failure they guard against is silent. `text` renders `display: inline`,
+ * and on a non-replaced inline box the CSS spec says `width` does not apply and
+ * `margin-left: auto` resolves to zero — so a link given a width simply ignores
+ * it, and a right-hand icon sits next to the label instead of at the end. No
+ * error, no warning; it just looks wrong.
+ */
+test("a flow link honours a width, where a text link cannot", async ({
+  mount,
+}) => {
+  const component = await mount(
+    <div style={{ width: "400px" }}>
+      <StyledLink href="/a" presentation="flow" style={{ width: "300px" }}>
+        <span data-testid="flow-label">Flow</span>
+      </StyledLink>
+      <StyledLink href="/b" presentation="text" style={{ width: "300px" }}>
+        <span data-testid="text-label">Text</span>
+      </StyledLink>
+    </div>,
+  );
+
+  const links = component.locator("a");
+  const flow = (await links.nth(0).boundingBox())!;
+  const text = (await links.nth(1).boundingBox())!;
+
+  // The width applies to `flow`...
+  expect(flow.width).toBeCloseTo(300, 0);
+  // ...and is discarded by `text`, which is correct for an inline box and is
+  // exactly why `flow` had to be added rather than reusing `text`.
+  expect(text.width).toBeLessThan(300);
+});
+
+test("a flow link is a flex container, so margin-left:auto still works", async ({
+  mount,
+}) => {
+  const component = await mount(
+    <div style={{ width: "400px" }}>
+      <StyledLink
+        href="/a"
+        presentation="flow"
+        style={{ width: "300px" }}
+        rightIcon={<span data-testid="icon">→</span>}
+      >
+        Label
+      </StyledLink>
+    </div>,
+  );
+
+  const link = (await component.locator("a").boundingBox())!;
+  const icon = (await component.getByTestId("icon").boundingBox())!;
+
+  // The icon sits in the right-hand half of a 300px link. On an inline box it
+  // would sit immediately after the label, near the left.
+  expect(icon.x).toBeGreaterThan(link.x + link.width / 2);
+});
+
+test("flow does NOT carry the 48px control floor, and control does", async ({
+  mount,
+}) => {
+  const component = await mount(
+    <div style={{ width: "400px" }}>
+      <StyledLink href="/a" presentation="flow">
+        Flow
+      </StyledLink>
+      <StyledLink href="/b" presentation="control">
+        Control
+      </StyledLink>
+    </div>,
+  );
+
+  const links = component.locator("a");
+  const flow = (await links.nth(0).boundingBox())!;
+  const control = (await links.nth(1).boundingBox())!;
+
+  // The house floor, stated in CLAUDE.md and not negotiable for a tap target.
+  expect(control.height).toBeGreaterThanOrEqual(48);
+  // `flow` is a layout participant, not a target. If this ever reaches 48 the
+  // two modes have collapsed into one and `flow`'s reason for existing is gone.
+  expect(flow.height).toBeLessThan(48);
+});
+
+test("standalone still means control, so existing consumers are untouched", async ({
+  mount,
+}) => {
+  const component = await mount(
+    <div style={{ width: "400px" }}>
+      {/*
+        The SAME label text in both. An earlier version of this test used
+        "Standalone" and "Control", which differ in width for the obvious
+        reason and made the comparison meaningless — it failed at all four
+        viewports on a correct implementation.
+      */}
+      <StyledLink href="/a" standalone>
+        Same label
+      </StyledLink>
+      <StyledLink href="/b" presentation="control">
+        Same label
+      </StyledLink>
+    </div>,
+  );
+
+  const links = component.locator("a");
+  const deprecated = (await links.nth(0).boundingBox())!;
+  const explicit = (await links.nth(1).boundingBox())!;
+
+  expect(deprecated.height).toBeCloseTo(explicit.height, 0);
+  expect(deprecated.width).toBeCloseTo(explicit.width, 0);
+});
