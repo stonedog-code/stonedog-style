@@ -85,3 +85,77 @@ describe("StyledTag", () => {
     expect(container.querySelector("span")?.className).toContain("mine");
   });
 });
+
+/**
+ * Tone (NEH-721).
+ *
+ * HopperGuard drives 109 of its 155 tags from a status — `STATUS_COLOR[item.status]`
+ * and friends — so the tag's colour is carrying meaning, and a package with one
+ * fixed appearance would have flattened all of them to grey.
+ *
+ * These assert what jsdom CAN answer: that the tones are distinct classes and
+ * that the default is unchanged. Whether each class has CSS behind it is a
+ * different question and is asserted in `__tests__/tag-tone-css.test.ts`, which
+ * reads the real generated stylesheet — the distinction this package keeps
+ * relearning, because a class name with no rule behind it looks identical here.
+ */
+describe("StyledTag tone", () => {
+  const TONES = ["neutral", "info", "success", "warning", "error", "accent"] as const;
+
+  it("defaults to neutral, so existing call sites are untouched", () => {
+    const { container: withDefault } = render(<StyledTag>Draft</StyledTag>);
+    const { container: explicit } = render(<StyledTag tone="neutral">Draft</StyledTag>);
+
+    expect(withDefault.firstElementChild!.className).toBe(
+      explicit.firstElementChild!.className,
+    );
+  });
+
+  it("gives every tone a distinct class", () => {
+    const classes = TONES.map((tone) => {
+      const { container } = render(<StyledTag tone={tone}>Draft</StyledTag>);
+      return container.firstElementChild!.className;
+    });
+
+    // A Set smaller than the list means two tones render identically, which is
+    // the defect `input-bool` shipped for months (NEH-234/NEH-310) — variants
+    // that were declared differently and painted the same.
+    expect(new Set(classes).size).toBe(TONES.length);
+  });
+
+  it("renders no indicator unless asked", () => {
+    const { container } = render(<StyledTag tone="success">Enabled</StyledTag>);
+    expect(container.querySelector("[aria-hidden='true']")).toBeNull();
+  });
+
+  /**
+   * The escape hatch for WCAG 1.4.1. A tag whose label names its own state
+   * ("Enabled") needs nothing; one tinted to mean something its text does not
+   * say has colour as its only signal, and needs this.
+   */
+  it("renders an indicator when given one, hidden from the accessibility tree", () => {
+    const { container } = render(
+      <StyledTag tone="success" indicator="✓">
+        Reminders
+      </StyledTag>,
+    );
+
+    const indicator = container.querySelector("[aria-hidden='true']");
+    expect(indicator).not.toBeNull();
+    expect(indicator).toHaveTextContent("✓");
+    // The label is still the accessible name — the glyph must not join it.
+    expect(screen.getByText("Reminders")).toBeInTheDocument();
+  });
+
+  it("keeps the remove button working in every tone", async () => {
+    const onRemove = jest.fn();
+    render(
+      <StyledTag tone="error" onRemove={onRemove} removeLabel="Remove Draft">
+        Draft
+      </StyledTag>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove Draft" }));
+    expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+});

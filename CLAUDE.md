@@ -54,7 +54,7 @@ different companies and licensed differently. It is two things in one package:
 
 | Entry point | What it is | Who imports it |
 |---|---|---|
-| `@stonedogcode/style/preset` | A **Panda CSS preset** — colour tokens, breakpoints, and 22 recipes | the consumer's `panda.config.ts`, at build time in Node |
+| `@stonedogcode/style/preset` | A **Panda CSS preset** — colour tokens, breakpoints, and 23 recipes | the consumer's `panda.config.ts`, at build time in Node |
 | `@stonedogcode/style` | The **React components** built on those recipes | application code |
 
 They are separate entry points on purpose: the config runs in Node during the
