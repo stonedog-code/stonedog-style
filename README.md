@@ -12,7 +12,7 @@ the whole component set re-skins at runtime. No component here knows a colour.
 
 ## Status
 
-Early. The preset is complete (22 recipes, 43 colour tokens); the component set
+Early. The preset is complete (23 recipes, 43 colour tokens); the component set
 is being extracted incrementally and currently covers the layout and typography
 primitives. See [CLAUDE.md](./CLAUDE.md) for the architecture and the
 contribution rules.

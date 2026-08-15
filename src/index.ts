@@ -207,7 +207,7 @@ export { default as StyledLink, StyledLink as Link } from "./components/StyledLi
 export type { StyledLinkProps } from "./components/StyledLink";
 
 export { default as StyledTag, StyledTag as Tag } from "./components/StyledTag";
-export type { StyledTagProps } from "./components/StyledTag";
+export type { StyledTagProps, TagTone } from "./components/StyledTag";
 
 export {
   default as StyledFieldErrors,

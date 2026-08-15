@@ -25,6 +25,7 @@ import {
 } from "./recipes/separator";
 import { stackRecipe } from "./recipes/stack";
 import { stripedRecipe } from "./recipes/striped";
+import { tagRecipe } from "./recipes/tag";
 import { textRecipe } from "./recipes/text";
 import { tooltipRecipe } from "./recipes/tooltip";
 
@@ -83,6 +84,7 @@ const recipes = {
   separatorVerticalRecipe,
   stackRecipe,
   stripedRecipe,
+  tagRecipe,
   textRecipe,
   tooltipRecipe,
 };
@@ -135,7 +137,7 @@ const staticCssAlignment = [
 
 /**
  * The @stonedogcode/style Panda preset: colour tokens, breakpoints, keyframes, and
- * the 22 recipes the component library is built on.
+ * the 23 recipes the component library is built on.
  *
  * Deliberately does NOT set `globalCss`, `preflight`, `include`, or `outdir` —
  * those are application decisions, and a preset that quietly restyles `body` is

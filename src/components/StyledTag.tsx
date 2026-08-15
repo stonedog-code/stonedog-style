@@ -2,10 +2,51 @@
 
 import React from "react";
 import { css, cx } from "styled-system/css";
+import { tagRecipe } from "styled-system/recipes";
+import type { AlertStatus } from "./StyledAlert";
+
+/**
+ * A tag's tone.
+ *
+ * The four status names ARE `AlertStatus`, referenced rather than retyped, so
+ * the package cannot drift into two status vocabularies — a green that means
+ * "success" on a banner and "active" on a tag is the kind of divergence nobody
+ * notices until a product has both.
+ *
+ * `neutral` and `accent` extend it. `neutral` is the historical appearance and
+ * stays the default; `accent` exists because a tag is frequently just a
+ * *category* — a type, a group, a label — and forcing those into `info` would
+ * make "informational" mean nothing.
+ */
+export type TagTone = "neutral" | AlertStatus | "accent";
 
 export interface StyledTagProps
   extends Omit<React.HTMLAttributes<HTMLSpanElement>, "onSelect"> {
   children: React.ReactNode;
+  /**
+   * The tag's colour, carrying meaning.
+   *
+   * ## Colour must not be the only signal (WCAG 1.4.1, Level A)
+   *
+   * Usually it is not, and that is why there is no forced glyph here: a tag
+   * generally *is* its label, so `<StyledTag tone="success">Enabled</StyledTag>`
+   * says "enabled" in words and the colour merely reinforces it. `StyledAlert`
+   * needs a glyph because a banner's status is genuinely carried by its
+   * colouring; a tag's is carried by its text.
+   *
+   * **The exception is a tag whose label does not name its own state** — a
+   * feature name tinted green for on and grey for off, say. There the colour is
+   * the only signal and the criterion is unmet, so pass `indicator`.
+   */
+  tone?: TagTone;
+  /**
+   * A non-colour signal rendered before the label.
+   *
+   * Deliberately not defaulted per tone. See `tone` above: defaulting one would
+   * put a glyph on every tag in every consumer to fix the minority of cases
+   * where the label does not already say what the colour says.
+   */
+  indicator?: React.ReactNode;
   /**
    * Show a remove control, and call this when it is activated.
    *
@@ -49,33 +90,29 @@ export interface StyledTagProps
  */
 export const StyledTag = React.forwardRef<HTMLSpanElement, StyledTagProps>(
   function StyledTag(
-    { children, onRemove, removeLabel = "Remove", className, ...rest },
+    {
+      children,
+      tone = "neutral",
+      indicator,
+      onRemove,
+      removeLabel = "Remove",
+      className,
+      ...rest
+    },
     ref,
   ) {
     return (
       <span
         ref={ref}
-        className={cx(
-          css({
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "1",
-            paddingInline: "2",
-            // Vertical padding is deliberately absent: the height comes from
-            // the line box and the horizontal padding, so a tag tracks the
-            // font scale instead of needing a re-tune whenever it moves.
-            borderRadius: "md",
-            backgroundColor: "boxBgSecondary",
-            color: "textSecondary",
-            // Not a tap target: a plain tag is not interactive, so the 48px
-            // floor does not apply to it. The remove BUTTON below is, and does.
-            fontSize: "sm",
-            whiteSpace: "nowrap",
-          }),
-          className,
-        )}
+        /*
+         * The recipe, not an inline `css()` — see `preset/recipes/tag.ts`. A
+         * tone computed at runtime (`tone={STATUS_COLOR[status]}`) is invisible
+         * to Panda's extractor, and `staticCssRecipes` is what covers it.
+         */
+        className={cx(tagRecipe({ tone }), className)}
         {...rest}
       >
+        {indicator !== undefined && <span aria-hidden="true">{indicator}</span>}
         <span>{children}</span>
         {onRemove !== undefined && (
           <button
