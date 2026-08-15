@@ -173,6 +173,28 @@ export const StyledPage = React.forwardRef<HTMLDivElement, StyledPageProps>(
             flexDirection: "column",
             flex: "1",
             width: "100%",
+            // BOTH `flex: 1` and `height: 100%`, and the second is not
+            // redundant (NEH-802).
+            //
+            // `flex: 1` covers the common case — the page is a flex item in a
+            // column, and takes the space the column offers. That is what the
+            // app shell does, so it is easy to conclude this is the only case
+            // and drop the height. It was dropped, and it broke a production
+            // dashboard.
+            //
+            // `flex: 1` is INERT inside a block-level parent. HopperGuard's
+            // `/dashboard` nests one page inside another through plain
+            // `display: block` wrappers, and there the page's height came
+            // entirely from `height: 100%`. Without it the inner page fell
+            // back to CONTENT height — 138px, of which a widget header took
+            // ~128, leaving its `1fr` body 10px of padding and the grid zero.
+            // The header rendered; every tile was clipped to nothing.
+            //
+            // The failure is silent in the worst way: nothing errors, nothing
+            // is unstyled, and the page looks deliberately empty. Only a
+            // computed-height walk up the DOM shows it, which is why no unit
+            // test or type-check can stand in for the assertion below.
+            height: "100%",
             // See the contract note above: without this the overflow escapes
             // the row rather than scrolling inside it.
             minHeight: "0",

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import StyledPage from "../StyledPage";
@@ -173,5 +175,38 @@ describe("StyledPage", () => {
   it("keeps caller-supplied class names", () => {
     render(<StyledPage className="mine">c</StyledPage>);
     expect(screen.getByTestId("styled-page-root").className).toContain("mine");
+  });
+});
+
+/**
+ * NEH-802 — the root must claim `height: 100%` as well as `flex: 1`.
+ *
+ * These are not alternatives. `flex: 1` covers a page that is a flex item in a
+ * column, which is the common case and the reason the height looks redundant.
+ * It is inert inside a **block-level** parent, and HopperGuard's `/dashboard`
+ * nests one page inside another through plain `display: block` wrappers.
+ *
+ * When the height was dropped, the inner page fell back to CONTENT height —
+ * 138px, of which a widget header took ~128, leaving its `1fr` body 10px of
+ * padding and the widget grid **zero**. The header rendered and every tile was
+ * clipped away. Seven tiles were in the DOM the whole time.
+ *
+ * WHAT THIS TEST CAN AND CANNOT DO. jsdom has no layout engine, so it cannot
+ * measure the collapse — every element reports a zero-sized box, and a test
+ * asserting "the grid is visible" would pass against the broken build. What it
+ * CAN do is assert the declaration survives, which is the thing that was
+ * removed. The behavioural assertion belongs in the consumer's e2e tier, at a
+ * real viewport, and is tracked on NEH-802.
+ */
+describe("NEH-802: the root claims a height, not only a flex", () => {
+  it("declares height 100% alongside flex 1", () => {
+    // Read from the source rather than the rendered class name: Panda hashes
+    // the class, so asserting on the DOM here would test the hash and not the
+    // declaration. The source IS the contract for a package that ships source.
+    const src = readFileSync(join(__dirname, "..", "StyledPage.tsx"), "utf8");
+    const root = src.slice(src.indexOf("styled-page-root"), src.indexOf("styled-page-title"));
+
+    expect(root).toMatch(/flex:\s*"1"/);
+    expect(root).toMatch(/height:\s*"100%"/);
   });
 });
