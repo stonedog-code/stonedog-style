@@ -204,7 +204,7 @@ export type { StyledFormLabelProps } from "./components/StyledFormLabel";
 // that stops it working.
 // ---------------------------------------------------------------------------
 export { default as StyledLink, StyledLink as Link } from "./components/StyledLink";
-export type { StyledLinkProps } from "./components/StyledLink";
+export type { StyledLinkProps, LinkPresentation } from "./components/StyledLink";
 
 export { default as StyledTag, StyledTag as Tag } from "./components/StyledTag";
 export type { StyledTagProps, TagTone } from "./components/StyledTag";
