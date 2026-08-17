@@ -164,12 +164,18 @@ export const listRecipe = defineSlotRecipe({
       },
       ghost: {
         item: {
-          color: "textSecondary",
+          // The partner of `buttonBgSecondary` (NEH-877). `textSecondary`
+          // belongs to `boxBgSecondary`, a surface this variant does not paint.
+          color: "buttonTextSecondary",
           bg: "buttonBgSecondary",
           borderRadius: "md",
           cursor: "pointer",
           _hover: {
             bg: "boxBgAccent",
+            // The hover repaints an accent surface, so the row must take that
+            // surface's partner rather than ride the base colour onto it —
+            // 1.14:1 in optima's light theme if it did.
+            color: "textAccent",
           },
         },
       },

@@ -82,7 +82,11 @@ export const inputRadioRootRecipe = defineSlotRecipe({
       solid: {
         item: {
           bg: "boxBgAccent",
-          color: "textPrimary",
+          // `textAccent` is the contract's partner for this surface;
+          // `textPrimary` belongs to `boxBgPrimary` and measures 1.17:1 on it
+          // against optima's light theme, whose accent surface is a near-black
+          // graphite (NEH-877). This is the DEFAULT variant of this recipe.
+          color: "textAccent",
           borderColor: "borderBgPrimary",
         },
       },
@@ -116,12 +120,16 @@ export const inputRadioRootRecipe = defineSlotRecipe({
       matte: {
         item: {
           bg: "buttonBgSecondary",
-          color: "textAccent",
+          // Was `textAccent` — the partner of `boxBgAccent`, a surface this
+          // variant does not paint. 1.14:1 in optima's light theme, where the
+          // accent text is white and this fill is near-white (NEH-877).
+          color: "buttonTextSecondary",
         },
       },
       ghost: {
         item: {
-          color: "textSecondary",
+          // `textSecondary` is `boxBgSecondary`'s partner, not this fill's.
+          color: "buttonTextSecondary",
           bg: "buttonBgSecondary",
           border: "none",
         },

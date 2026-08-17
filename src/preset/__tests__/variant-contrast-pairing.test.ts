@@ -297,41 +297,43 @@ describe("a variant that paints a background states its text colour", () => {
    * contrast tests structurally cannot see it either. That is this project's
    * recurring "a check that verifies one half and reads as the whole".
    *
-   * ## Scoped to `buttonRecipe`, and the scope is a finding rather than a
-   * ## convenience
+   * ## The scope is gone (NEH-877)
    *
-   * Run over the whole preset, this sweep reports **28 further mispairings** —
-   * in `iconButton`, `tooltip`, `input-text`, `input-dropdown`, `input-bool`,
-   * `input-radio`, `list` and `form`. Most are the identical mistake: an accent
-   * or secondary surface painted with `textPrimary`, which is the colour for
-   * `boxBgPrimary`.
+   * NEH-796 landed this sweep restricted to `buttonRecipe`, with the rest
+   * recorded as a finding: fixing them repaints text in eight recipes across
+   * four consuming applications, which wanted its own PR and a real look at the
+   * result. That PR is NEH-877 and this is it — the sweep now runs over the
+   * whole preset with no recipe restriction, and there is still no allowlist.
    *
-   * They are not fixed here, and this is deliberately NOT an allowlist of them
-   * (the `KNOWN_DEAD` list NEH-301 deleted is what that becomes). Fixing them
-   * repaints text in eight recipes across four consuming applications, which is
-   * a visible change wanting its own PR and a real look at the result — the
-   * same reasoning the "known inherited defects" note gives for `input-text`'s
-   * literals. What is scoped here is the QUESTION, not the offenders: every
-   * variant of `buttonRecipe` is asked, with no exception written for any of
-   * them, so the recipe this issue is about cannot regress.
-   *
-   * Widening the recipe list is the whole of the change when someone takes the
-   * rest on.
+   * **The count on that finding was 28; measured, it is 27.** The number is
+   * corrected rather than quietly dropped, because the next person to widen a
+   * guard will compare against it. `NEH_877_CORRECTED` below is the measured
+   * list, and it is asserted as coverage rather than as an exception.
    */
-  const PAIRING_GUARDED_RECIPES = new Set(["button"]);
 
-  it("states the PAIRED text token wherever a guarded recipe paints a contract surface", () => {
+  it("states the PAIRED text token wherever the preset paints a contract surface", () => {
     // Only backgrounds the token contract has declared a partner for. A variant
     // painting `gray.800` or a gradient is making a pairing the contract says
     // nothing about, and asserting on it would be inventing a rule rather than
     // enforcing one.
+    //
+    // `INHERITS_BY_DESIGN` is deliberately NOT consulted here, and that is a
+    // change from NEH-796 rather than an oversight. It excuses `glass` from the
+    // sweep above because a translucent surface should show the page through it
+    // — but this sweep only fires when the background is a CONTRACT SURFACE
+    // TOKEN, and the contract naming a text partner for a surface is the
+    // contract saying that surface is opaque and has a known foreground. Five
+    // `glass` variants painted one of those and stated the wrong partner, the
+    // worst of them white-on-near-white at 1.05:1 (`tooltip`, against optima's
+    // light theme). One of the five was `button glass` — inside the recipe
+    // NEH-796 believed it had guarded without exception. A name-based exemption
+    // in a guard whose whole premise is that it has none is exactly the
+    // `KNOWN_DEAD` shape NEH-301 deleted, one indirection along.
     const mispaired: string[] = [];
 
     for (const [selector, bg] of backgroundBySelector) {
       const m = VARIANT_SELECTOR.exec(selector);
       if (!m) continue;
-      if (!PAIRING_GUARDED_RECIPES.has(m[1]!)) continue;
-      if (INHERITS_BY_DESIGN.has(m[2]!)) continue;
 
       const expected = PAIRED_TEXT_FOR_BACKGROUND.get(bg.trim());
       if (!expected) continue;
@@ -347,16 +349,91 @@ describe("a variant that paints a background states its text colour", () => {
     expect(mispaired).toEqual([]);
   });
 
+  /**
+   * Every variant NEH-877 repainted, named.
+   *
+   * The sweep above is the guard; this is its COVERAGE. They fail differently
+   * and both failures matter: the sweep goes red if a variant states the wrong
+   * partner, and this goes red if a variant stops being *inspected* at all —
+   * which is what happens when a recipe swaps a contract surface for a literal
+   * or a gradient. A surface the contract knows nothing about is a surface
+   * neither this file nor a host's theme tests can check, so silently drifting
+   * out of the sweep is a regression that would otherwise read as a pass.
+   *
+   * Measured against optima-cloud-saas's real themes rather than eyeballed:
+   * **14 of these 27 were below WCAG AA in the light theme** before this
+   * change (5 of them under 1.2:1 — text the same colour as its own surface),
+   * every one of the 27 clears AA after it, and none of them regressed in
+   * either theme. The dark theme survived all but none of them, which is the
+   * NEH-796 pattern exactly: a defect that only one of two themes reveals is
+   * one that ships.
+   */
+  const NEH_877_CORRECTED = [
+    // `boxBgAccent` -> `textAccent`. Was `textPrimary`, the partner of
+    // `boxBgPrimary`: 1.17:1 in optima's light theme.
+    ".form--variant_solid",
+    ".input-dropdown--variant_solid",
+    ".input-dropdown--variant_glass",
+    ".input-text--variant_solid",
+    ".input-text--variant_glass",
+    ".input-radio__item--variant_solid",
+    // `buttonBgAccent` -> `buttonTextAccent`. The NEH-796 pairing exactly,
+    // in the recipes it was not applied to: 2.43:1 light.
+    ".button--variant_glass",
+    ".iconButton--variant_solid",
+    ".iconButton--variant_outline",
+    ".iconButton--variant_glass",
+    ".input-bool__control--variant_solid",
+    ".input-bool__control--variant_outline",
+    // `buttonBgSecondary` -> `buttonTextSecondary`.
+    ".input-dropdown--variant_matte",
+    ".input-dropdown--variant_ghost",
+    ".input-text--variant_matte",
+    ".input-text--variant_ghost",
+    ".input-bool__control--variant_ghost",
+    ".input-radio__item--variant_matte",
+    ".input-radio__item--variant_ghost",
+    ".list__item--variant_ghost",
+    // `boxBgPrimary` -> `textPrimary`. Every tooltip variant paints the same
+    // surface and seven of them named a different surface's text token.
+    ".tooltip--variant_solid",
+    ".tooltip--variant_aurora",
+    ".tooltip--variant_glass",
+    ".tooltip--variant_matte",
+    ".tooltip--variant_ghost",
+    ".tooltip--variant_none",
+    ".tooltip--variant_unstyled",
+  ] as const;
+
+  it("still inspects every variant NEH-877 corrected", () => {
+    const notInspected = NEH_877_CORRECTED.filter((selector) => {
+      const bg = backgroundBySelector.get(selector);
+      return !bg || !PAIRED_TEXT_FOR_BACKGROUND.has(bg.trim());
+    });
+
+    expect(notInspected).toEqual([]);
+    // Eight recipes, which is the breadth the issue was filed about. A sweep
+    // that quietly narrowed to one recipe again would still satisfy the line
+    // above if the list were trimmed to match, so the count is pinned here.
+    expect(NEH_877_CORRECTED.length).toBe(27);
+  });
+
   it("actually reached the pairing branch, rather than matching nothing", () => {
     // The guard on the guard, again. `PAIRED_TEXT_FOR_BACKGROUND` is keyed by
     // the exact string Panda emits, so a change to that spelling would make
     // every lookup miss and the sweep above pass having compared nothing.
     const matched = [...backgroundBySelector].filter(([selector, bg]) => {
       const m = VARIANT_SELECTOR.exec(selector);
-      return Boolean(m) && PAIRING_GUARDED_RECIPES.has(m![1]!) && PAIRED_TEXT_FOR_BACKGROUND.has(bg.trim());
+      return Boolean(m) && PAIRED_TEXT_FOR_BACKGROUND.has(bg.trim());
     });
 
-    expect(matched.length).toBeGreaterThan(1);
+    expect(matched.length).toBeGreaterThanOrEqual(NEH_877_CORRECTED.length);
+    // And across several recipes, not 27 variants of one — the shape the scope
+    // removal is FOR.
+    const recipes = new Set(
+      matched.map(([selector]) => VARIANT_SELECTOR.exec(selector)![1]!),
+    );
+    expect(recipes.size).toBeGreaterThanOrEqual(8);
     expect(PAIRED_TEXT_FOR_BACKGROUND.get("var(--colors-button-bg-accent)")).toBe(
       "var(--colors-button-text-accent)",
     );

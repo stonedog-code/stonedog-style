@@ -66,12 +66,31 @@ export const inputSurfaceBase = {
  * The variant map. Every variant states its own `bg`, `color`, and
  * `borderColor` rather than inheriting some and not others — that asymmetry is
  * what let the two recipes disagree without either looking wrong on its own.
+ *
+ * ## The colour has to be the surface's PARTNER, not just a colour (NEH-877)
+ *
+ * Four of these paired a surface with the wrong contract token, and because
+ * `inputTextRecipe` and `inputDropdownRecipe` both spread this map, each one was
+ * eight offending selectors rather than four. `solid` and `glass` paint
+ * `boxBgAccent` and said `textPrimary` — the partner of `boxBgPrimary` — which
+ * measures **1.17:1** against optima's light theme, a control whose typed value
+ * is the exact colour of the field. `matte` and `ghost` paint
+ * `buttonBgSecondary` and said `textSecondary`, the partner of `boxBgSecondary`.
+ *
+ * **The placeholder moves with the text**, which is the part easy to miss here:
+ * `inputSurfaceBase` sets `&::placeholder { color: textPrimary }` for the
+ * base's own `textPrimary`, so a variant that repaints the surface and only
+ * fixes `color` leaves the placeholder on the old pairing — the same defect,
+ * surviving in the one piece of text an empty field actually shows.
  */
 export const inputSurfaceVariants = {
   solid: {
     bg: "boxBgAccent",
-    color: "textPrimary",
+    color: "textAccent",
     borderColor: "borderBgPrimary",
+    "&::placeholder": {
+      color: "textAccent",
+    },
   },
   outline: {
     // Stated, not omitted. An outline control is meant to show whatever is
@@ -97,12 +116,15 @@ export const inputSurfaceVariants = {
     borderStyle: "solid",
     borderRadius: "xl",
     bg: "boxBgAccent",
-    color: "textPrimary",
+    // An opaque accent fill with a blur applied to what is behind it — not a
+    // translucent surface, whatever the name says, so it takes the accent
+    // partner like `solid` (NEH-877).
+    color: "textAccent",
     borderColor: "borderBgSecondary",
     backdropFilter: "blur(12px)",
     fontWeight: "normal",
     _placeholder: {
-      color: "textPrimary",
+      color: "textAccent",
       opacity: 0.8,
     },
     _focusVisible: {
@@ -130,15 +152,20 @@ export const inputSurfaceVariants = {
   },
   matte: {
     bg: "buttonBgSecondary",
-    color: "textSecondary",
+    color: "buttonTextSecondary",
     borderColor: "borderBgPrimary",
+    // Otherwise the placeholder keeps the base's `textPrimary` while the value
+    // above it moves — see the note on this map (NEH-877).
+    "&::placeholder": {
+      color: "buttonTextSecondary",
+    },
   },
   ghost: {
-    color: "textSecondary",
+    color: "buttonTextSecondary",
     bg: "buttonBgSecondary",
     borderColor: "borderBgPrimary",
     "&::placeholder": {
-      color: "textSecondary/60",
+      color: "buttonTextSecondary/60",
     },
   },
   none: {
