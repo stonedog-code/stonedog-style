@@ -15,6 +15,7 @@ import {
   getBackgroundForText,
   requiredCssCustomProperties,
 } from "../semantic-variables";
+import { Z_LAYERS, zIndexTokenNames } from "../z-layers";
 import { stonedogStylePreset, stonedogStyleRecipes } from "../index";
 
 describe("the colour token contract", () => {
@@ -246,6 +247,43 @@ describe("recipes honour the configurable prefix", () => {
   });
 
   /**
+   * The same defect, one property along — a LAYER name (NEH-830).
+   *
+   * `drawerRecipe` said `zIndex: "modal"` and no `zIndex` token scale existed,
+   * here or in either base Panda preset. So Panda emitted the literal
+   *
+   *     .drawer { position: fixed; z-index: modal; }
+   *
+   * which is not a valid `z-index` value, so the browser dropped it and that
+   * panel had no z-index at all. Exactly `bg: "buttonBgHover"`, one property
+   * along, and equally invisible: the class is in the DOM, the type-checker is
+   * happy, and every behaviour test passes because none of them can see a
+   * stacking order.
+   *
+   * Written against the generated stylesheet rather than the recipe source for
+   * the same reason the colour guard is: a token that fails to resolve looks
+   * *identical* to one that resolves, right up until the CSS is emitted.
+   */
+  it("never emits a z-index that is neither a token reference nor a real value", () => {
+    const Z_INDEX = /^\s*z-index\s*:\s*([^;]+);/;
+    // What a browser will actually accept: an integer, `auto`, a global
+    // keyword, or a custom property that resolves to one of those.
+    const REAL_CSS = /^(var\(.+\)|-?\d+|auto|inherit|initial|unset|revert)$/;
+
+    const offenders = new Set<string>();
+    for (const line of recipeSource.split("\n")) {
+      const match = Z_INDEX.exec(line);
+      if (!match) continue;
+      const value = match[1]!.trim();
+      if (REAL_CSS.test(value)) continue;
+      offenders.add(value);
+    }
+
+    // Before the fix this read `["modal"]`.
+    expect([...offenders].sort()).toEqual([]);
+  });
+
+  /**
    * The same defect, one nesting level down — inside a gradient (NEH-301).
    *
    * The declaration-level guard above cannot see these: a value containing
@@ -419,6 +457,36 @@ describe("the preset", () => {
     expect(preset.preflight).toBeUndefined();
     expect(preset.include).toBeUndefined();
     expect(preset.outdir).toBeUndefined();
+  });
+
+  it("carries a zIndex scale a host can override", () => {
+    // The whole mechanism of NEH-830: names here, numbers at the host. If
+    // these tokens stop reaching `theme.extend.tokens`, every `zIndex: "<name>"`
+    // in this package silently becomes an invalid literal again — and a host's
+    // override has nothing to override.
+    const preset = stonedogStylePreset();
+    const zIndex = preset.theme?.extend?.tokens?.zIndex as
+      | Record<string, { value: number }>
+      | undefined;
+    expect(zIndex?.modal).toBeDefined();
+    expect(Object.keys(zIndex ?? {}).sort()).toEqual(
+      [...zIndexTokenNames()].sort(),
+    );
+  });
+
+  it("orders the layers so a dialog's own controls can open on top of it", () => {
+    // The ORDER is the contract; the numbers are the host's. Menus, toasts,
+    // tooltips and modals all have to be able to open ON a dialog, so each is
+    // above it. Raising the dialog to "win" a stacking argument is the change
+    // that looks right and hides every popup opened inside one.
+    const values = zIndexTokenNames().map((name) => Z_LAYERS[name]);
+    expect(values).toEqual([...values].sort((a, b) => a - b));
+    expect(new Set(values).size).toBe(values.length);
+
+    for (const above of ["menu", "popover", "overlay", "toast", "modal", "tooltip"] as const) {
+      expect(Z_LAYERS[above]).toBeGreaterThan(Z_LAYERS.dialog);
+    }
+    expect(Z_LAYERS.hide).toBeLessThan(Z_LAYERS.base);
   });
 
   it("threads the prefix option through to the generated tokens", () => {
