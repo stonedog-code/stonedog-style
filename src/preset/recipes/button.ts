@@ -37,10 +37,20 @@ export const buttonRecipe = defineRecipe({
     variant: {
       solid: {
         bg: "buttonBgAccent",
-        color: "textPrimary",
+        // The same pairing `outline` states below, and for the same reason
+        // (NEH-441, NEH-796). `textPrimary` is the colour that goes on
+        // `boxBgPrimary`, not on an accent surface: against optima's light
+        // theme that pairing measures 2.43:1, below WCAG AA, while
+        // `buttonTextAccent` measures 7.34:1. The dark theme happens to
+        // survive it, which is what let a default variant ship unreadable.
+        //
+        // `TEXT_BACKGROUND_PAIRS` in `semantic-variables.ts` is the contract
+        // being obeyed: `buttonTextAccent` sits on `buttonBgAccent`, and
+        // `buttonTextSecondary` on the `buttonBgSecondary` the hover repaints.
+        color: "buttonTextAccent",
         _hover: {
           bg: "buttonBgSecondary",
-          color: "textPrimary",
+          color: "buttonTextSecondary",
         },
       },
       outline: {
@@ -126,7 +136,12 @@ export const buttonRecipe = defineRecipe({
         },
       },
       selected: {
-        color: "textPrimary",
+        // `textAccent`, not `textPrimary` — the same mispairing `solid` had
+        // (NEH-796). `boxBgAccent` is an accent surface and the contract's
+        // partner for it is `textAccent`; `textPrimary` is the colour for
+        // `boxBgPrimary`, a different surface. Adjacent instance of the defect
+        // the issue names, in the same recipe, so it is fixed here.
+        color: "textAccent",
         border: "3px dashed black",
         borderRadius: "xl",
         bg: "boxBgAccent",

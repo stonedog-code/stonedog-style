@@ -1,5 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
+import { TEXT_BACKGROUND_PAIRS } from "../semantic-variables";
 
 /**
  * A variant that paints a background must state the text colour that goes with
@@ -141,18 +142,54 @@ const rules = parseRules(styles);
  */
 const backgroundBySelector = new Map<string, string>();
 const colourBySelector = new Set<string>();
+/**
+ * The colour's VALUE, not merely that one was stated (NEH-796).
+ *
+ * The set above answers "did this variant say anything at all", which is the
+ * NEH-441 question. It cannot answer "did it say the right thing" — and
+ * `button solid` shipped for months stating `textPrimary` on an accent
+ * background, which is a stated colour and a failing contrast ratio.
+ */
+const colourValueBySelector = new Map<string, string>();
 for (const rule of rules) {
   const bg = backgroundOf(rule.body);
-  const hasColour = Boolean(declaration(rule.body, "color"));
+  const colour = declaration(rule.body, "color");
+  const hasColour = Boolean(colour);
   for (const raw of rule.selector.split(",")) {
     const selector = raw.trim();
     if (!selector) continue;
     if (bg && !backgroundBySelector.has(selector)) {
       backgroundBySelector.set(selector, bg);
     }
-    if (hasColour) colourBySelector.add(selector);
+    if (hasColour) {
+      colourBySelector.add(selector);
+      if (!colourValueBySelector.has(selector)) {
+        colourValueBySelector.set(selector, colour!);
+      }
+    }
   }
 }
+
+/**
+ * `--colors-button-bg-accent` -> `--colors-button-text-accent`, derived from
+ * `TEXT_BACKGROUND_PAIRS` rather than written out here.
+ *
+ * That map is the token contract's own statement of which text token sits on
+ * which surface, and it exists precisely because the relationship is NOT
+ * inferable from the names — `buttonTextPlain` sits on `buttonBgPlain`, not on
+ * any `box*`. Re-deriving it here would be a second copy free to drift from the
+ * one the themes are validated against.
+ *
+ * Panda emits a semantic token as `var(--colors-<kebab-cased token name>)`.
+ */
+const kebab = (token: string) => token.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+const cssVar = (token: string) => `var(--colors-${kebab(token)})`;
+const PAIRED_TEXT_FOR_BACKGROUND = new Map(
+  Object.entries(TEXT_BACKGROUND_PAIRS).map(([text, background]) => [
+    cssVar(background),
+    cssVar(text),
+  ]),
+);
 
 /**
  * Selector shapes.
@@ -231,6 +268,98 @@ describe("a variant that paints a background states its text colour", () => {
 
     expect(backgroundBySelector.has(".box--variant_link")).toBe(true);
     expect(colourBySelector.has(".box--variant_link")).toBe(true);
+  });
+
+  it("pairs `solid` the way `outline` is paired (NEH-796)", () => {
+    // `solid` is the app-wide default variant, and it stated `textPrimary` —
+    // the colour that goes on `boxBgPrimary` — over an accent background.
+    // Against optima-cloud-saas's light theme that measures 2.43:1, below AA;
+    // its dark theme happens to clear AA, which is what let a default variant
+    // ship unreadable for one of the two themes and neither host notice.
+    //
+    // The sweep above cannot see this: `solid` DID state a colour, so "has a
+    // background and no colour" was false. What was wrong is WHICH colour, and
+    // that is what the block below asks in general.
+    expect(backgroundBySelector.get(".button--variant_solid")).toBe(
+      "var(--colors-button-bg-accent)",
+    );
+    expect(colourValueBySelector.get(".button--variant_solid")).toBe(
+      "var(--colors-button-text-accent)",
+    );
+  });
+
+  /**
+   * The general form of the assertion above, and the gap this file had.
+   *
+   * Every other check here asks about a property a recipe SETS or OMITS. None
+   * asked whether the value it set was the one that goes WITH the surface
+   * underneath — and that pairing is made by the PRESET, so a host's own
+   * contrast tests structurally cannot see it either. That is this project's
+   * recurring "a check that verifies one half and reads as the whole".
+   *
+   * ## Scoped to `buttonRecipe`, and the scope is a finding rather than a
+   * ## convenience
+   *
+   * Run over the whole preset, this sweep reports **28 further mispairings** —
+   * in `iconButton`, `tooltip`, `input-text`, `input-dropdown`, `input-bool`,
+   * `input-radio`, `list` and `form`. Most are the identical mistake: an accent
+   * or secondary surface painted with `textPrimary`, which is the colour for
+   * `boxBgPrimary`.
+   *
+   * They are not fixed here, and this is deliberately NOT an allowlist of them
+   * (the `KNOWN_DEAD` list NEH-301 deleted is what that becomes). Fixing them
+   * repaints text in eight recipes across four consuming applications, which is
+   * a visible change wanting its own PR and a real look at the result — the
+   * same reasoning the "known inherited defects" note gives for `input-text`'s
+   * literals. What is scoped here is the QUESTION, not the offenders: every
+   * variant of `buttonRecipe` is asked, with no exception written for any of
+   * them, so the recipe this issue is about cannot regress.
+   *
+   * Widening the recipe list is the whole of the change when someone takes the
+   * rest on.
+   */
+  const PAIRING_GUARDED_RECIPES = new Set(["button"]);
+
+  it("states the PAIRED text token wherever a guarded recipe paints a contract surface", () => {
+    // Only backgrounds the token contract has declared a partner for. A variant
+    // painting `gray.800` or a gradient is making a pairing the contract says
+    // nothing about, and asserting on it would be inventing a rule rather than
+    // enforcing one.
+    const mispaired: string[] = [];
+
+    for (const [selector, bg] of backgroundBySelector) {
+      const m = VARIANT_SELECTOR.exec(selector);
+      if (!m) continue;
+      if (!PAIRING_GUARDED_RECIPES.has(m[1]!)) continue;
+      if (INHERITS_BY_DESIGN.has(m[2]!)) continue;
+
+      const expected = PAIRED_TEXT_FOR_BACKGROUND.get(bg.trim());
+      if (!expected) continue;
+
+      const actual = colourValueBySelector.get(selector);
+      // Stating no colour at all is the sweep above's finding, reported there.
+      if (actual === undefined) continue;
+      if (actual.trim() === expected) continue;
+
+      mispaired.push(`${selector} { background: ${bg}; color: ${actual} } — expected ${expected}`);
+    }
+
+    expect(mispaired).toEqual([]);
+  });
+
+  it("actually reached the pairing branch, rather than matching nothing", () => {
+    // The guard on the guard, again. `PAIRED_TEXT_FOR_BACKGROUND` is keyed by
+    // the exact string Panda emits, so a change to that spelling would make
+    // every lookup miss and the sweep above pass having compared nothing.
+    const matched = [...backgroundBySelector].filter(([selector, bg]) => {
+      const m = VARIANT_SELECTOR.exec(selector);
+      return Boolean(m) && PAIRING_GUARDED_RECIPES.has(m![1]!) && PAIRED_TEXT_FOR_BACKGROUND.has(bg.trim());
+    });
+
+    expect(matched.length).toBeGreaterThan(1);
+    expect(PAIRED_TEXT_FOR_BACKGROUND.get("var(--colors-button-bg-accent)")).toBe(
+      "var(--colors-button-text-accent)",
+    );
   });
 
   it("paints input-radio's `none` variant from the theme, not from a literal", () => {
