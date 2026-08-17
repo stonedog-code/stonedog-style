@@ -103,7 +103,19 @@ export const inputBoolRecipe = defineSlotRecipe({
       solid: {
         control: {
           bg: "buttonBgAccent",
-          color: "textPrimary",
+          /**
+           * The contract's partner for this fill (NEH-877), and INERT today.
+           *
+           * Neither `bg` nor `color` paints on a checkbox at `appearance:
+           * auto` — the note in `base` and NEH-234 are about exactly that — so
+           * this changes nothing anyone can see, and that is the honest reason
+           * to make it: the declarations are left in place per that note, and
+           * a declaration left in place should not be left WRONG. `textPrimary`
+           * is the partner of `boxBgPrimary`; the day option 2 on NEH-310
+           * (`appearance: none` plus a hand-drawn tick) makes these paint, it
+           * would paint at 2.43:1 against optima's light theme.
+           */
+          color: "buttonTextAccent",
           accentColor: "buttonBgPrimary",
           boxShadow: "none",
         },
@@ -111,7 +123,8 @@ export const inputBoolRecipe = defineSlotRecipe({
       outline: {
         control: {
           bg: "buttonBgAccent",
-          color: "textPrimary",
+          // Same fill, same partner, same inertness as `solid` above.
+          color: "buttonTextAccent",
           /**
            * The SAME checked fill as `solid`, deliberately.
            *
@@ -227,7 +240,10 @@ export const inputBoolRecipe = defineSlotRecipe({
       },
       ghost: {
         control: {
-          color: "textSecondary",
+          // `buttonTextSecondary` is the partner of the fill below;
+          // `textSecondary` belongs to `boxBgSecondary` (NEH-877). Inert for
+          // the same reason as `solid`.
+          color: "buttonTextSecondary",
           bg: "buttonBgSecondary",
           accentColor: "buttonBgPrimary",
           // The thinnest ring in the set, in the secondary border colour.

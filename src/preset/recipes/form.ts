@@ -15,7 +15,12 @@ export const formRecipe = defineRecipe({
     variant: {
       solid: {
         bg: "boxBgAccent",
-        color: "textPrimary",
+        // `textAccent`, not `textPrimary` (NEH-877). `textPrimary` is the
+        // contract's partner for `boxBgPrimary`, a different surface: against
+        // optima's light theme, whose accent surface is a near-black graphite,
+        // that pairing measures 1.17:1 — a form whose every label is the exact
+        // colour of the panel behind it. `textAccent` measures 15.27:1.
+        color: "textAccent",
         borderColor: "borderBgPrimary",
         "& > li:not(:last-child)": {
           borderBottom: "1px solid",

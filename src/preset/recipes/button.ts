@@ -87,7 +87,15 @@ export const buttonRecipe = defineRecipe({
         border: "2px solid",
         borderRadius: "xl",
         bg: "buttonBgAccent",
-        color: "textPrimary",
+        // The same correction `solid` took in NEH-796, which this variant was
+        // missed by twice over (NEH-877): the pairing sweep that landed with it
+        // was scoped to this recipe, but it also skipped every variant named
+        // `glass` — on the reasoning that a translucent surface should inherit.
+        // This one is not translucent. It paints an opaque `buttonBgAccent` and
+        // blurs what is BEHIND it, so it owes a paired foreground like any
+        // other accent surface: 2.43:1 with `textPrimary` against optima's
+        // light theme, 7.34:1 with this.
+        color: "buttonTextAccent",
         boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
@@ -96,6 +104,13 @@ export const buttonRecipe = defineRecipe({
         transition: "all 0.3s ease",
         _hover: {
           bg: "buttonBgSecondary",
+          // Stated, because the hover repaints a DIFFERENT surface (NEH-877).
+          // Without it the label rides its base `buttonTextAccent` onto a
+          // secondary background — 1.06:1 in optima's light theme, white on
+          // near-white, i.e. the label vanishing on hover. This is the same
+          // move `solid` made in NEH-796 and the reason a base-colour fix has
+          // to look at every pseudo-state that repaints beneath it.
+          color: "buttonTextSecondary",
           borderColor: "rgba(255,255,255,0.4)",
           boxShadow: "0 8px 32px rgba(0,0,0,0.3), inset 0 0 20px rgba(255,255,255,0.1)",
           transform: "translateY(-1px)",

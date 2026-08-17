@@ -64,23 +64,42 @@ export const buttonIconRecipe = defineRecipe({
       },
     },
     variant: {
+      /**
+       * The NEH-796 pairing, applied to the recipe it was never applied to
+       * (NEH-877).
+       *
+       * `buttonRecipe` and this one are the same control in two shapes, and
+       * `iconButton` carried the identical defect in three variants: an accent
+       * fill labelled with `textPrimary`, the contract's partner for
+       * `boxBgPrimary`. Against optima's light theme that measures 2.43:1,
+       * below WCAG AA; `buttonTextAccent` measures 7.34:1. The dark theme
+       * clears AA either way, which is what let it ship.
+       *
+       * Each `_hover` that repaints a different surface states its own colour
+       * for the same reason — the base colour riding onto a secondary fill is
+       * the failure one state along.
+       */
       solid: {
         bg: "buttonBgAccent",
-        color: "textPrimary",
+        color: "buttonTextAccent",
         _hover: {
           bg: "buttonBgSecondary",
-          color: "textPrimary",
+          color: "buttonTextSecondary",
         },
       },
       outline: {
         bg: "buttonBgAccent",
-        color: "textPrimary",
+        color: "buttonTextAccent",
         border: "1px solid",
         borderColor: "borderBgSecondary",
         borderRadius: 0,
         _hover: {
           border: "2px solid",
           bg: "buttonBgAccentHover",
+          // The hover surface has its own partner in the contract, and it is
+          // not the base one. Both are white in optima's palette today; the
+          // point is that a host is free to make them differ.
+          color: "buttonTextAccentHover",
         },
       },
       aurora: {
@@ -98,7 +117,10 @@ export const buttonIconRecipe = defineRecipe({
         borderColor: "black",
         borderRadius: "xl",
         bg: "buttonBgAccent",
-        color: "textPrimary",
+        // Not translucent, whatever the name suggests: the fill is an opaque
+        // `buttonBgAccent` and the blur applies to what is behind it. So it
+        // takes the accent partner like its neighbours above (NEH-877).
+        color: "buttonTextAccent",
         boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
@@ -107,6 +129,10 @@ export const buttonIconRecipe = defineRecipe({
         transition: "all 0.3s ease",
         _hover: {
           bg: "buttonBgSecondary",
+          // Stated because the hover repaints a different surface — otherwise
+          // the glyph keeps `buttonTextAccent` over a secondary fill, 1.06:1 in
+          // optima's light theme (NEH-877).
+          color: "buttonTextSecondary",
           borderColor: "rgba(255,255,255,0.4)",
           boxShadow: "0 8px 32px rgba(0,0,0,0.3), inset 0 0 20px rgba(255,255,255,0.1)",
           transform: "translateY(-1px)",
@@ -140,11 +166,16 @@ export const buttonIconRecipe = defineRecipe({
         fontWeight: "bold",
       },
       ghost: {
+        // The base stays `textPrimary`: a 50% accent fill is a BLEND with
+        // whatever is behind it, so the contract has no partner for it and
+        // `textPrimary` measures 5.9:1 over the light-theme blend. The hover
+        // takes the fill to full opacity, which IS a contract surface — and
+        // there `textPrimary` is the 2.43:1 pairing again (NEH-877).
         bg: "buttonBgAccent/50",
         color: "textPrimary",
         _hover: {
           bg: "buttonBgAccent",
-          color: "textPrimary",
+          color: "buttonTextAccent",
           border: "1px solid",
           borderColor: "gray.700",
         },
