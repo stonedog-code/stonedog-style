@@ -36,6 +36,7 @@ import {
   createSemanticFonts,
   createSemanticSizes,
 } from "./semantic-variables";
+import { createZIndexTokens } from "./z-layers";
 
 export interface StonedogStylePresetOptions {
   /**
@@ -184,6 +185,19 @@ export function stonedogStylePreset(options: StonedogStylePresetOptions = {}) {
            */
           fonts: createSemanticFonts(cssVarPrefix),
           fontWeights: createSemanticFontWeights(cssVarPrefix),
+          /**
+           * Named stacking layers (NEH-830). Neither this preset nor either
+           * base Panda preset defined any, so `drawerRecipe`'s `zIndex:
+           * "modal"` resolved to nothing and was emitted as the literal
+           * `z-index: modal` — invalid CSS the browser discards, leaving that
+           * panel with no z-index at all.
+           *
+           * Unlike the colour tokens these carry no custom property: a layer
+           * is not a brand decision and there is nothing for a theme to
+           * restyle. A HOST overrides the numbers in its own config; see
+           * z-layers.ts for why the names live here and the values do not.
+           */
+          zIndex: createZIndexTokens(),
         },
         keyframes: {
           spin: {
@@ -249,6 +263,13 @@ export {
   getBackgroundForText,
   requiredCssCustomProperties,
 } from "./semantic-variables";
+
+export {
+  Z_LAYERS,
+  createZIndexTokens,
+  zIndexTokenNames,
+  type ZLayerName,
+} from "./z-layers";
 
 export { recipes as stonedogStyleRecipes };
 

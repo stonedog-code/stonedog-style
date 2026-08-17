@@ -522,6 +522,28 @@ enough to survive an extraction in the first place, and the entire value of the
 guard is that there is no way to make it pass except by making the declaration
 render.
 
+**A third guard walks `z-index`, because the defect is not really about colour
+(NEH-830).** `drawerRecipe` said `zIndex: "modal"` from the day it was
+extracted and **no `zIndex` token scale had ever existed** — not here, not in
+either base Panda preset. So the stylesheet said `z-index: modal`, the browser
+discarded it, and the drawer panel had no z-index at all. Identical to
+`bg: "buttonBgHover"`, one property along, and it survived longer only because
+nobody thinks to grep a stacking order.
+
+The fix is `src/preset/z-layers.ts`, and the shape of it is the part worth
+keeping: **this package owns the layer NAMES, a host owns the NUMBERS.** A
+z-index ladder encodes which of *that product's* surfaces may cover which, and
+no two products agree — HopperGuard's real ladder runs to `200000`. So the
+preset ships conventional defaults and a host overrides the values in its own
+`theme.extend.tokens.zIndex`. Overriding keeps the name, and the name is the
+half that makes an ordering reviewable.
+
+Two rules follow. **Never write a bare number for a layer in the root stacking
+context** — a literal expresses no relationship, so nothing can check it. And
+**an inline `style` cannot name a token**, which is why `Z_LAYERS` is exported
+as plain numbers too: a portalled element must read the same ladder as the
+stylesheet or the two drift silently.
+
 **A second guard walks gradient colour stops**, because the first one cannot
 see them: a value containing `gradient` reads as real CSS to a
 declaration-level regex. Five gradients were dead behind that gap — three with
