@@ -135,6 +135,65 @@ describe("StyledTooltip", () => {
 });
 
 /**
+/**
+ * The leaked open timer (NEH-818).
+ *
+ * `show()` runs from the trigger's mouseenter AND its focus, and a single
+ * press fires both ~0ms apart. Assigning over `timeoutRef.current` left the
+ * first timer running with nothing holding its id, so `hide()` could cancel
+ * only the last one scheduled — and the orphan opened a tooltip that no
+ * departure event could ever close.
+ *
+ * The ordering is a pure state question, so it belongs in this tier, where it
+ * runs on every save and inside the merge gate. What the stranded tooltip then
+ * DOES — sit over a dialog at `pointer-events: auto` and eat a click meant for
+ * the control underneath — is a layout question that jsdom cannot answer at
+ * all, and lives in `StyledTooltip.ct.tsx`.
+ */
+describe("StyledTooltip — a pending open must never be orphaned", () => {
+  it("does not open after a press-then-leave, whatever order the events arrive in", () => {
+    render(
+      <StyledTooltip tooltip="Track a medication and set reminders.">
+        <button>Add Medicine</button>
+      </StyledTooltip>,
+    );
+    const wrapper = screen.getByRole("button", { name: "Add Medicine" }).parentElement!;
+
+    // The measured sequence from a real press, in order: the pointer arrives,
+    // the press focuses the child, the pointer leaves. Note focus is NOT
+    // released — a press leaves it on the button, which is why `onBlur` never
+    // arrives to save us.
+    fireEvent.mouseEnter(wrapper);
+    fireEvent.focus(wrapper);
+    fireEvent.mouseLeave(wrapper);
+
+    act(() => {
+      jest.advanceTimersByTime(200);
+    });
+
+    // Before the fix the mouseenter's timer survived `hide()` and fired here.
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  it("leaves nothing pending that could fire after the trigger is gone", () => {
+    const { unmount } = render(
+      <StyledTooltip tooltip="Track a medication and set reminders.">
+        <button>Add Medicine</button>
+      </StyledTooltip>,
+    );
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "Add Medicine" }).parentElement!);
+
+    unmount();
+
+    // A timer that outlives its component calls setState on a torn-down tree.
+    // `jest.getTimerCount()` is the honest check: asserting no tooltip renders
+    // would pass trivially once the tree is gone, which is a green test that
+    // cannot fail.
+    expect(jest.getTimerCount()).toBe(0);
+  });
+});
+
+/**
  * Click mode (NEH-222 / the StyledSidebar PRD, §B).
  *
  * Hover tooltips fail readers whose pointer drifts: the panel closes before

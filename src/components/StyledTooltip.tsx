@@ -269,9 +269,19 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
     }
   }, [visible, placement]);
 
-  // Click mode owns its own dismissal. Hover mode needs none of this: it
-  // closes when the pointer leaves. A panel opened by a deliberate press has
-  // to be closable by a deliberate action, and Escape has to work, or a
+  // A pending open timer must not outlive the component. Nothing else clears
+  // it on unmount, so a trigger removed inside the delay window fired
+  // setVisible on a component React had already torn down.
+  useEffect(
+    () => () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    },
+    [],
+  );
+
+  // Click mode's dismissal. A panel opened by a deliberate press has to be
+  // closable by a deliberate action — a press outside it, or Escape — or a
   // keyboard user is stuck with it open.
   useEffect(() => {
     if (!isClick || !visible || typeof document === "undefined") return;
@@ -280,6 +290,7 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
       if (event.key !== "Escape") return;
       setVisible(false);
       // Focus goes back to what opened it — never to the top of the document.
+      // Hover mode has no equivalent, because nothing was focused to open it.
       helpRef.current?.focus();
     };
     const onPointerDown = (event: MouseEvent) => {
@@ -298,6 +309,69 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
     };
   }, [isClick, visible]);
 
+  /**
+   * Hover mode's dismissal, which used to be nothing at all (NEH-818).
+   *
+   * `hide()` is reachable only from the trigger's own `onMouseLeave` /
+   * `onBlur`, so an open tooltip whose trigger never receives another
+   * departure event stays on the page for the life of the document — opaque,
+   * taking pointer events, over whatever opened on top of it. That is not a
+   * hypothetical ordering: a press both focuses the trigger and covers it, so
+   * blur cannot fire (focus stays put) and mouseleave has already been and
+   * gone.
+   *
+   * These two listeners are on `document`, so neither depends on the trigger
+   * being reachable — which is the property the trigger's own handlers lack.
+   *
+   * - **`pointermove`** closes it once the pointer is over neither the trigger
+   *   nor the tooltip. It deliberately does not fire on the tooltip itself:
+   *   WCAG 2.2 1.4.13 *Hoverable* requires the reader be able to move onto the
+   *   revealed text without it vanishing, which is also why the portal keeps
+   *   `pointer-events: auto`.
+   * - **Escape** satisfies 1.4.13 *Dismissible*, which hover mode did not meet
+   *   before: content revealed on hover or focus must be dismissable without
+   *   moving the pointer or focus, and a reader whose pointer is parked had no
+   *   way to clear it.
+   *
+   * Bound only while a hover tooltip is actually open, so the common case
+   * costs nothing.
+   */
+  useEffect(() => {
+    if (isClick || !visible || typeof document === "undefined") return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      // No focus move: in hover mode nothing was focused to open this, and
+      // stealing focus on Escape would be its own bug.
+      setVisible(false);
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (triggerRef.current?.contains(target) || tooltipRef.current?.contains(target)) return;
+      // A tooltip revealed by FOCUS belongs to the focus, not to the pointer.
+      // WCAG 2.2 1.4.13 Persistent requires it to stay until its trigger is
+      // released, so taking it away because an unrelated mouse moved would
+      // trade one conformance failure for another — and would do it to a
+      // keyboard reader who never touched the mouse. Escape above is their
+      // dismissal.
+      if (
+        document.activeElement &&
+        triggerRef.current?.contains(document.activeElement)
+      ) {
+        return;
+      }
+      setVisible(false);
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointermove", onPointerMove);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointermove", onPointerMove);
+    };
+  }, [isClick, visible]);
+
   if (!tooltip) {
     return <>{children}</>;
   }
@@ -306,11 +380,34 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
   // would produce "[object Object]" in the accessibility tree.
   const tooltipLabel = typeof tooltip === "string" ? tooltip : undefined;
 
+  /**
+   * Schedule the open.
+   *
+   * **Clearing first is the whole of NEH-818.** `show()` runs from four
+   * places — the trigger's mouseenter and focus, and the tooltip's own
+   * mouseenter — and more than one of them fires for a single gesture: a press
+   * both hovers and focuses the trigger, ~0ms apart. Assigning over
+   * `timeoutRef.current` left the earlier timer running with nothing holding
+   * its id, so `hide()` could cancel only the last one scheduled.
+   *
+   * The orphan then fired into a page the reader had already left, opening a
+   * tooltip that no departure event could ever close — measured as a live,
+   * opaque, click-eating overlay sitting over the dialog the press had just
+   * opened, gone only on reload.
+   *
+   * One timer at a time; the id is nulled when it fires so `hide()` never
+   * clears a stale one.
+   */
   const show = () => {
-    timeoutRef.current = setTimeout(() => setVisible(true), delay);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      timeoutRef.current = null;
+      setVisible(true);
+    }, delay);
   };
   const hide = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
     setVisible(false);
   };
 
