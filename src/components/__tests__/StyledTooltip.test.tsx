@@ -202,6 +202,14 @@ describe("StyledTooltip — a pending open must never be orphaned", () => {
  * is that the help control is *separate* — the child is usually a button, and
  * that button's click has to keep belonging to the button.
  */
+/**
+ * The help control is named after the thing it explains — "Help: Add", not
+ * "More information" (NEH-769). These assertions were flipped deliberately: a
+ * screen carrying twenty tooltips carried twenty buttons with the same generic
+ * name, so a reader tabbing through heard the same four words twenty times and
+ * could not tell which one answered their question. Restoring the old string
+ * here would restore that.
+ */
 describe("StyledTooltip — click mode", () => {
   it("defaults to hover: no help control, opens on pointer-in", () => {
     render(
@@ -210,7 +218,7 @@ describe("StyledTooltip — click mode", () => {
       </StyledTooltip>,
     );
 
-    expect(screen.queryByRole("button", { name: "More information" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Help: / })).not.toBeInTheDocument();
     openBy(fireEvent.mouseEnter, screen.getByRole("button", { name: "Add" }));
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
   });
@@ -222,7 +230,7 @@ describe("StyledTooltip — click mode", () => {
       </StyledTooltip>,
     );
 
-    const help = screen.getByRole("button", { name: "More information" });
+    const help = screen.getByRole("button", { name: "Help: Add" });
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     expect(help).toHaveAttribute("aria-expanded", "false");
 
@@ -243,7 +251,7 @@ describe("StyledTooltip — click mode", () => {
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
     // ...and an open panel is not dismissed by the pointer wandering off.
-    fireEvent.click(screen.getByRole("button", { name: "More information" }));
+    fireEvent.click(screen.getByRole("button", { name: "Help: Add" }));
     fireEvent.mouseLeave(screen.getByRole("button", { name: "Add" }));
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
   });
@@ -270,7 +278,7 @@ describe("StyledTooltip — click mode", () => {
         <button>Add</button>
       </StyledTooltip>,
     );
-    const help = screen.getByRole("button", { name: "More information" });
+    const help = screen.getByRole("button", { name: "Help: Add" });
 
     fireEvent.click(help);
     fireEvent.click(help);
@@ -288,7 +296,7 @@ describe("StyledTooltip — click mode", () => {
         <button>Add</button>
       </StyledTooltip>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "More information" }));
+    fireEvent.click(screen.getByRole("button", { name: "Help: Add" }));
 
     // Inside: the text may be worth selecting, or contain a link.
     fireEvent.mouseDown(screen.getByRole("tooltip"));
