@@ -44,7 +44,6 @@ const HelpTrigger = styled("button", {
     // is hard to hit is a help control that does not get used.
     minWidth: "48px",
     minHeight: "48px",
-    marginLeft: "4px",
     borderRadius: "9999px",
     borderWidth: "1px",
     borderStyle: "solid",
@@ -53,6 +52,17 @@ const HelpTrigger = styled("button", {
     lineHeight: "1",
     verticalAlign: "middle",
   },
+  variants: {
+    // Which side of the children the control sits on — see helpGoesFirst
+    // below for how that is decided. The gap has to follow the side, or the
+    // control touches its subject on one side and floats away from it on the
+    // other, which is exactly the ambiguity this fix is about.
+    side: {
+      before: { marginRight: "4px" },
+      after: { marginLeft: "4px" },
+    },
+  },
+  defaultVariants: { side: "after" },
 });
 
 /**
@@ -111,7 +121,7 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
   "aria-label": ariaLabel,
   variant,
   trigger = "hover",
-  helpLabel = "More information",
+  helpLabel,
   ...rest
 }) => {
   // Caller's variant, else the app-wide one, else `solid` — and anything the
@@ -182,6 +192,7 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
   const canHover = useCanHover();
   const isClick = trigger === "click" || !canHover;
 
+
   // The child may be any component (StyledIconButton, a link, a bare span), so
   // whether it is focusable can only be known from the rendered DOM — React
   // cannot see inside a child component's output. Starts as "yes" so the common
@@ -233,9 +244,36 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
   // a duplicated one is a new bug.
   const [needsFallbackName, setNeedsFallbackName] = useState(false);
 
+  /**
+   * The child's own visible text, used to name the help control after the
+   * thing it explains (NEH-769).
+   *
+   * A screen carrying twenty tooltips carried twenty buttons all called "More
+   * information", which names nothing: a reader tabbing through hears the same
+   * four words twenty times and cannot tell which one answers their question.
+   * "Help: Require PIN" is the same control with a name that distinguishes it.
+   *
+   * Measured from the DOM rather than read from `children` because the child
+   * may be any component — React cannot see the text inside a child component's
+   * output, only the element it was handed.
+   */
+  const [subjectLabel, setSubjectLabel] = useState("");
+
   useLayoutEffect(() => {
     const node = triggerRef.current;
-    const found = node?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? null;
+    const help = helpRef.current;
+
+    // The help control is itself a `button`, so it matches FOCUSABLE_SELECTOR
+    // and must be excluded from every question asked about the CHILD. This was
+    // already wrong before the control could be rendered first — with a
+    // non-focusable child the query returned the help button, so
+    // aria-describedby landed on the button that already names itself instead
+    // of on the thing being described. Once the control renders first it would
+    // have matched every time (NEH-769).
+    const found =
+      Array.from(node?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []).find(
+        (candidate) => candidate !== help,
+      ) ?? null;
     // Same-value setState is a no-op in React, so this cannot loop.
     setFocusableChild((prev) => (prev === found ? prev : found));
     setHasFocusableChild(found !== null);
@@ -251,6 +289,20 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
     setFocusableAncestor((prev) => (prev === ancestor ? prev : ancestor));
 
     if (!node) return;
+
+    // The child's own text — the help control's "?" deliberately excluded, or
+    // every subject would be named "… ?" and a text-free child would look as
+    // though it had text.
+    const ownText = Array.from(node.childNodes)
+      .filter((child) => child !== help)
+      .map((child) => child.textContent ?? "")
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    // Long enough to distinguish twenty controls, short enough that a screen
+    // reader does not read a paragraph before the reader can act on it.
+    setSubjectLabel(ownText.length > 80 ? `${ownText.slice(0, 80).trimEnd()}…` : ownText);
+
     // parentElement, not the node itself: closest() would match our own
     // aria-label once we set one, and the answer would flip every render.
     const namedByAncestor = Boolean(
@@ -259,12 +311,12 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
     // Text content names an element for free; so does a labelled descendant
     // (an icon carrying its own aria-label, an <img alt>).
     const namedByContent =
-      (node.textContent ?? "").trim().length > 0 ||
-      Boolean(
-        node.querySelector('[aria-label], [aria-labelledby], img[alt]:not([alt=""])'),
-      );
+      ownText.length > 0 ||
+      Array.from(
+        node.querySelectorAll('[aria-label], [aria-labelledby], img[alt]:not([alt=""])'),
+      ).some((el) => el !== help);
     setNeedsFallbackName(!namedByAncestor && !namedByContent);
-  }, [children]);
+  }, [children, isClick]);
 
   // aria-describedby has to sit on whatever actually receives focus, or a screen
   // reader announces the control with no description. Set imperatively rather
@@ -482,6 +534,51 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
   // would produce "[object Object]" in the accessibility tree.
   const tooltipLabel = typeof tooltip === "string" ? tooltip : undefined;
 
+  /**
+   * `Label → ? → Input` — the help control goes after the label and before the
+   * control it explains, never after it (NEH-769).
+   *
+   * Not aesthetic. A screen-magnifier user reads linearly at high zoom, so a
+   * `?` placed after a long input is pushed off the visible viewport entirely;
+   * before the control, the reader meets the concept, can ask what it means,
+   * and only then enters data.
+   *
+   * Consumers wrap two shapes and both have to obey that rule, which is why
+   * neither a fixed "always before" nor a fixed "always after" is right:
+   *
+   *   `<Tooltip><Label/></Tooltip> <Input/>`      the input is OUTSIDE us, so
+   *                                               the control goes AFTER  →  Label ? | Input
+   *   `<Tooltip><Row><Label/><Toggle/></Row></Tooltip>`
+   *                                               the control is INSIDE us, so
+   *                                               it goes BEFORE          →  ? Label Toggle
+   *
+   * So the side keys on whether the children contain something focusable —
+   * which the component already measures for its own tab-stop logic. It is
+   * measured in a layout effect, so it settles before paint rather than
+   * flickering into place.
+   */
+  const helpGoesFirst = hasFocusableChild;
+
+  /**
+   * Explicit label wins; otherwise name the control after its subject. Only
+   * when there is no text at all does it fall back to the old generic name.
+   */
+  const resolvedHelpLabel =
+    helpLabel ?? (subjectLabel ? `Help: ${subjectLabel}` : "More information");
+
+  const helpControl = isClick ? (
+    <HelpTrigger
+      ref={helpRef}
+      type="button"
+      side={helpGoesFirst ? "before" : "after"}
+      aria-label={resolvedHelpLabel}
+      aria-expanded={visible}
+      aria-controls={visible ? tooltipId : undefined}
+      onClick={() => setVisible((open) => !open)}
+    >
+      ?
+    </HelpTrigger>
+  ) : null;
 
   return (
     <>
@@ -519,24 +616,21 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
         onMouseLeave={isClick ? undefined : hide}
         onFocus={isClick ? undefined : show}
         onBlur={isClick ? undefined : hide}
-        aria-describedby={
-          !isClick && !insideFocusable && visible ? tooltipId : undefined
-        }
+        // When something focusable is in play the description is set
+        // imperatively on THAT element instead (see the layout effect above) —
+        // it has to sit on whatever actually receives focus. This wrapper is
+        // the fallback for label-only children, and it applies in click mode
+        // too: help that is reachable but never announced is help a screen
+        // reader user does not know exists (NEH-769).
+        //
+        // `insideFocusable`, not `hasFocusableChild`, so a focusable ANCESTOR
+        // still owns the description rather than this wrapper (NEH-950).
+        aria-describedby={!insideFocusable && visible ? tooltipId : undefined}
         {...rest}
       >
+        {helpGoesFirst && helpControl}
         {children}
-        {isClick && (
-          <HelpTrigger
-            ref={helpRef}
-            type="button"
-            aria-label={helpLabel}
-            aria-expanded={visible}
-            aria-controls={visible ? tooltipId : undefined}
-            onClick={() => setVisible((open) => !open)}
-          >
-            ?
-          </HelpTrigger>
-        )}
+        {!helpGoesFirst && helpControl}
       </TooltipTrigger>
       {visible && typeof document !== "undefined" &&
         createPortal(
