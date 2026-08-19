@@ -1,7 +1,7 @@
 "use client";
 
 import { log } from "../config/logger";
-import React, { useRef, useState, useLayoutEffect, useEffect } from "react";
+import React, { useRef, useState, useLayoutEffect, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { styled } from "styled-system/jsx";
 import StyledText from "./StyledText";
@@ -134,6 +134,42 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
   const tooltipRef = useRef<HTMLDivElement>(null);
   const helpRef = useRef<HTMLButtonElement>(null);
   /**
+   * Schedule the open.
+   *
+   * **Clearing first is the whole of NEH-818.** `show()` runs from four
+   * places — the trigger's mouseenter and focus, and the tooltip's own
+   * mouseenter — and more than one of them fires for a single gesture: a press
+   * both hovers and focuses the trigger, ~0ms apart. Assigning over
+   * `timeoutRef.current` left the earlier timer running with nothing holding
+   * its id, so `hide()` could cancel only the last one scheduled.
+   *
+   * The orphan then fired into a page the reader had already left, opening a
+   * tooltip that no departure event could ever close — measured as a live,
+   * opaque, click-eating overlay sitting over the dialog the press had just
+   * opened, gone only on reload.
+   *
+   * One timer at a time; the id is nulled when it fires so `hide()` never
+   * clears a stale one.
+   *
+   * Hoisted above the effects (and memoised) rather than declared beside the
+   * JSX: the ancestor-focus effect added for NEH-950 has to bind these as
+   * listeners, and a second copy of the timer discipline above is exactly how
+   * NEH-818 would come back.
+   */
+  const show = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      timeoutRef.current = null;
+      setVisible(true);
+    }, delay);
+  }, [delay]);
+  const hide = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+    setVisible(false);
+  }, []);
+
+  /**
    * A hover trigger on a device that cannot hover is not a worse experience —
    * it is an unreachable one. There is no hover event, and tapping the control
    * activates it rather than explaining it, so the help is rendered, correct
@@ -154,6 +190,38 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
   const [focusableChild, setFocusableChild] = useState<HTMLElement | null>(null);
   const [hasFocusableChild, setHasFocusableChild] = useState(true);
 
+  /**
+   * The focusable element this trigger sits *inside*, if any (NEH-950).
+   *
+   * `hasFocusableChild` looks down and cannot see upwards, so it answers "no
+   * focusable child" for an icon that is decorative content inside a control
+   * that is already focusable and already named — and the trigger then took a
+   * `tabIndex` of its own. The result was the exact failure the conditional
+   * above exists to prevent, one level in: a second tab stop inside a button
+   * the reader has already passed, carrying no role and no name because
+   * `needsFallbackName` correctly declines to name it (the ancestor already
+   * has). Every icon in `stonedog-icons` that carries its own tooltip
+   * reproduced it, in every consumer.
+   *
+   * Deleting the `tabIndex` alone would have been a different WCAG failure
+   * rather than a fix — the tooltip must stay reachable by keyboard (2.1.1).
+   * So the ancestor becomes the trigger instead: it already owns the tab stop,
+   * and the effect below opens the tooltip when it takes focus, exactly as a
+   * focusable *child* already does by bubbling.
+   *
+   * Starts null, and the layout effect below can only ever find an ancestor
+   * when there is no focusable child — the two are mutually exclusive by
+   * construction, so nothing has to decide between them.
+   */
+  const [focusableAncestor, setFocusableAncestor] = useState<HTMLElement | null>(null);
+
+  /**
+   * True when something else — a descendant or an ancestor — already puts this
+   * trigger's content in the tab sequence. When it does, the trigger must add
+   * no stop of its own, and must not invent a role or a name for one.
+   */
+  const insideFocusable = hasFocusableChild || focusableAncestor !== null;
+
   // When the trigger KEEPS its tab stop it must have a role and a name (WCAG
   // 2.2 4.1.2) — but only if nothing else already provides one. Borrowing the
   // tooltip text unconditionally is what broke SharedWithIndicator, which names
@@ -171,6 +239,16 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
     // Same-value setState is a no-op in React, so this cannot loop.
     setFocusableChild((prev) => (prev === found ? prev : found));
     setHasFocusableChild(found !== null);
+
+    // `parentElement.closest`, not `node.closest`: the trigger itself may be
+    // carrying the very `tabindex` this is deciding whether to keep, and
+    // matching ourselves would make the answer depend on the previous render.
+    // Only asked when there is no focusable child, because a child already
+    // settles the question and is the nearer trigger of the two.
+    const ancestor = found
+      ? null
+      : node?.parentElement?.closest<HTMLElement>(FOCUSABLE_SELECTOR) ?? null;
+    setFocusableAncestor((prev) => (prev === ancestor ? prev : ancestor));
 
     if (!node) return;
     // parentElement, not the node itself: closest() would match our own
@@ -194,7 +272,7 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
   // component forwarding the prop, and a child that quietly drops it would fail
   // invisibly.
   useLayoutEffect(() => {
-    const node = focusableChild;
+    const node = focusableChild ?? focusableAncestor;
     if (!node || !visible) return;
     const previous = node.getAttribute("aria-describedby");
     node.setAttribute(
@@ -205,7 +283,31 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
       if (previous === null) node.removeAttribute("aria-describedby");
       else node.setAttribute("aria-describedby", previous);
     };
-  }, [focusableChild, visible, tooltipId]);
+  }, [focusableChild, focusableAncestor, visible, tooltipId]);
+
+  /**
+   * Open on the ANCESTOR's focus, when the trigger is inside one (NEH-950).
+   *
+   * A focusable *child* needs nothing here: `focusin`/`focusout` bubble, so the
+   * wrapper's own `onFocus`/`onBlur` already fire for it. An ancestor is the
+   * other direction, where nothing bubbles, so the listeners go on the ancestor
+   * itself.
+   *
+   * Without this the fix would trade WCAG 2.2 4.1.2 (a focusable element with
+   * no role and no name) for 2.1.1 — the explanation would be rendered and
+   * reachable by pointer only. Hover mode only: click mode never took a tab
+   * stop, so it has nothing to give back.
+   */
+  useEffect(() => {
+    const node = focusableAncestor;
+    if (isClick || !node) return;
+    node.addEventListener("focusin", show);
+    node.addEventListener("focusout", hide);
+    return () => {
+      node.removeEventListener("focusin", show);
+      node.removeEventListener("focusout", hide);
+    };
+  }, [focusableAncestor, isClick, show, hide]);
 
   useLayoutEffect(() => {
     if (visible && triggerRef.current && tooltipRef.current) {
@@ -380,36 +482,6 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
   // would produce "[object Object]" in the accessibility tree.
   const tooltipLabel = typeof tooltip === "string" ? tooltip : undefined;
 
-  /**
-   * Schedule the open.
-   *
-   * **Clearing first is the whole of NEH-818.** `show()` runs from four
-   * places — the trigger's mouseenter and focus, and the tooltip's own
-   * mouseenter — and more than one of them fires for a single gesture: a press
-   * both hovers and focuses the trigger, ~0ms apart. Assigning over
-   * `timeoutRef.current` left the earlier timer running with nothing holding
-   * its id, so `hide()` could cancel only the last one scheduled.
-   *
-   * The orphan then fired into a page the reader had already left, opening a
-   * tooltip that no departure event could ever close — measured as a live,
-   * opaque, click-eating overlay sitting over the dialog the press had just
-   * opened, gone only on reload.
-   *
-   * One timer at a time; the id is nulled when it fires so `hide()` never
-   * clears a stale one.
-   */
-  const show = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      timeoutRef.current = null;
-      setVisible(true);
-    }, delay);
-  };
-  const hide = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = null;
-    setVisible(false);
-  };
 
   return (
     <>
@@ -420,7 +492,13 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
         // tooltip still fires without the wrapper taking focus itself. Adding
         // tabIndex here regardless is what gave every tooltipped control two
         // tab stops, the second of them silent (NEH-127).
-        tabIndex={isClick || hasFocusableChild ? undefined : 0}
+        //
+        // `insideFocusable`, not `hasFocusableChild`: an ANCESTOR owns the tab
+        // stop just as effectively as a descendant, and looking only downwards
+        // put the same silent second stop inside every icon button in the
+        // fleet (NEH-950). The ancestor-focus effect above is what keeps the
+        // tooltip reachable once the trigger stops taking focus itself.
+        tabIndex={isClick || insideFocusable ? undefined : 0}
         // A focusable element needs a role and a name (WCAG 2.2 4.1.2). Applied
         // only when the trigger keeps the tab stop AND nothing else names it —
         // see needsFallbackName above for why the condition matters (NEH-151).
@@ -429,9 +507,9 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
         // reveals content on focus, which is the closest standard role and what
         // the ARIA tooltip pattern assumes of a trigger. A focusable generic
         // with only a name still fails 4.1.2, which asks for both.
-        role={!isClick && !hasFocusableChild && needsFallbackName ? "button" : undefined}
+        role={!isClick && !insideFocusable && needsFallbackName ? "button" : undefined}
         aria-label={
-          isClick || hasFocusableChild
+          isClick || insideFocusable
             ? undefined
             : ariaLabel ?? (needsFallbackName ? tooltipLabel : undefined)
         }
@@ -442,7 +520,7 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
         onFocus={isClick ? undefined : show}
         onBlur={isClick ? undefined : hide}
         aria-describedby={
-          !isClick && !hasFocusableChild && visible ? tooltipId : undefined
+          !isClick && !insideFocusable && visible ? tooltipId : undefined
         }
         {...rest}
       >

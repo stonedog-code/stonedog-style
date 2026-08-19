@@ -398,3 +398,163 @@ describe("StyledTooltip — devices that cannot hover", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+/**
+ * A tooltip whose trigger sits inside something already focusable (NEH-950).
+ *
+ * The case the conditional `tabIndex` was written for is a bare tooltipped
+ * icon, which genuinely needs a stop of its own (NEH-127). The case it could
+ * not see is the mirror image: decorative content inside a control that is
+ * already focusable and already named. `hasFocusableChild` looks *down*, so it
+ * answered "nothing focusable here" and the wrapper took a tab stop —
+ * producing, one level in, the exact silent second stop NEH-127 removed.
+ *
+ * Every icon in `stonedog-icons` that carries its own tooltip reproduced this
+ * inside `StyledIconButton`, in every consumer.
+ */
+describe("inside a focusable ancestor", () => {
+  it("adds no tab stop of its own", () => {
+    // The defect, stated as the issue's own repro: `button [tabindex="0"]`
+    // must find nothing. Fails against the pre-fix component.
+    const { container } = render(
+      <button type="button" aria-label="Expand">
+        <StyledTooltip tooltip="Click to expand to full screen">
+          <span aria-hidden="true">icon</span>
+        </StyledTooltip>
+      </button>,
+    );
+    expect(container.querySelectorAll('button [tabindex="0"]')).toHaveLength(0);
+  });
+
+  it("leaves the ancestor as the only focusable element, and it keeps its name", () => {
+    // WCAG 2.2 4.1.2 — a focusable element needs a role AND a name. One
+    // control, named, is the whole of "done" here.
+    const { container } = render(
+      <button type="button" aria-label="Expand">
+        <StyledTooltip tooltip="Click to expand to full screen">
+          <span aria-hidden="true">icon</span>
+        </StyledTooltip>
+      </button>,
+    );
+    const focusable = container.querySelectorAll(
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    expect(focusable).toHaveLength(1);
+    expect(focusable[0]).toBe(screen.getByRole("button", { name: "Expand" }));
+  });
+
+  it("invents neither a role nor a name for the wrapper", () => {
+    // The wrapper used to be a focusable generic with no role and no name, so
+    // a screen reader announced nothing at all when Tab landed on it. It must
+    // not gain either as a consolation — the ancestor already carries both,
+    // and two elements claiming one name is its own bug (NEH-151).
+    const { container } = render(
+      <button type="button" aria-label="Expand">
+        <StyledTooltip tooltip="Click to expand to full screen">
+          <span aria-hidden="true">icon</span>
+        </StyledTooltip>
+      </button>,
+    );
+    const wrapper = container.querySelector("button > div")!;
+    expect(wrapper).not.toHaveAttribute("tabindex");
+    expect(wrapper).not.toHaveAttribute("role");
+    expect(wrapper).not.toHaveAttribute("aria-label");
+  });
+
+  it("still opens on keyboard focus — via the ancestor", () => {
+    // WCAG 2.2 2.1.1. Dropping the tab stop without this would trade one
+    // failure for another: the explanation would render, and be reachable by
+    // pointer only. `focusin` does not travel downwards, so the listener is on
+    // the ancestor rather than on the wrapper.
+    render(
+      <button type="button" aria-label="Expand">
+        <StyledTooltip tooltip="Click to expand to full screen">
+          <span aria-hidden="true">icon</span>
+        </StyledTooltip>
+      </button>,
+    );
+    openBy(fireEvent.focusIn, screen.getByRole("button", { name: "Expand" }));
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "Click to expand to full screen",
+    );
+  });
+
+  it("closes again when the ancestor loses focus", () => {
+    render(
+      <button type="button" aria-label="Expand">
+        <StyledTooltip tooltip="Click to expand to full screen">
+          <span aria-hidden="true">icon</span>
+        </StyledTooltip>
+      </button>,
+    );
+    const button = screen.getByRole("button", { name: "Expand" });
+    openBy(fireEvent.focusIn, button);
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    fireEvent.focusOut(button);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  it("describes the ancestor, because that is what receives focus", () => {
+    // aria-describedby has to sit on the focused element or a screen reader
+    // announces the control with no description at all.
+    render(
+      <button type="button" aria-label="Expand">
+        <StyledTooltip tooltip="Click to expand to full screen">
+          <span aria-hidden="true">icon</span>
+        </StyledTooltip>
+      </button>,
+    );
+    const button = screen.getByRole("button", { name: "Expand" });
+    openBy(fireEvent.focusIn, button);
+    expect(button).toHaveAttribute(
+      "aria-describedby",
+      screen.getByRole("tooltip").id,
+    );
+  });
+
+  it("is dismissible with Escape while the ancestor holds focus", () => {
+    // WCAG 2.2 1.4.13 Dismissible. A reader who has read it must be able to
+    // clear it without moving focus off the control.
+    render(
+      <button type="button" aria-label="Expand">
+        <StyledTooltip tooltip="Click to expand to full screen">
+          <span aria-hidden="true">icon</span>
+        </StyledTooltip>
+      </button>,
+    );
+    openBy(fireEvent.focusIn, screen.getByRole("button", { name: "Expand" }));
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  it("still gives a bare tooltipped icon a tab stop of its own", () => {
+    // The other direction. NEH-127's case must not regress: with nothing
+    // focusable above or below, the trigger IS the control, and it keeps both
+    // the stop and the role and name that a stop requires.
+    // A real icon has no text content, which is exactly why the trigger has
+    // to supply the role and the name along with the stop.
+    render(
+      <StyledTooltip tooltip="Notifications">
+        <svg aria-hidden="true" />
+      </StyledTooltip>,
+    );
+    const trigger = screen.getByRole("button", { name: "Notifications" });
+    expect(trigger).toHaveAttribute("tabindex", "0");
+  });
+
+  it("ignores a non-focusable ancestor", () => {
+    // A plain wrapper element must not be mistaken for a control. Only
+    // something genuinely in the tab sequence can take the stop over.
+    render(
+      <div>
+        <StyledTooltip tooltip="Notifications">
+          <svg aria-hidden="true" />
+        </StyledTooltip>
+      </div>,
+    );
+    expect(
+      screen.getByRole("button", { name: "Notifications" }),
+    ).toHaveAttribute("tabindex", "0");
+  });
+});

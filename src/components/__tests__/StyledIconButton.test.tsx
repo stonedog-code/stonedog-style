@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import StyledIconButton from "../StyledIconButton";
+import StyledTooltip from "../StyledTooltip";
 import { StonedogStyleProvider } from "../../config/style-config";
 
 const Icon = () => <svg data-testid="icon" />;
@@ -132,6 +133,50 @@ describe("StyledIconButton", () => {
     // rendered the component before sees nothing whether or not the props leak
     // — it passed against the unfixed component. The DOM assertion above is the
     // guard; the quiet console is its consequence.
+  });
+
+  /**
+   * The shape every `stonedog-icons` icon that carries its own tooltip renders
+   * in — an icon button whose child is itself tooltipped (NEH-950).
+   *
+   * This is the assembled case rather than a unit of one component, and it is
+   * the only place the defect was visible: neither component was wrong on its
+   * own. `StyledIconButton` correctly declined a tab stop because its child
+   * (the `<button>`) is focusable; the inner tooltip correctly took one
+   * because *its* child (the glyph) is not. Nesting them produced a second,
+   * silent stop inside a control the reader had already passed.
+   */
+  describe("with a tooltipped icon inside it", () => {
+    it("contributes exactly one tab stop", () => {
+      const { container } = render(
+        <StyledIconButton aria-label="Expand">
+          <StyledTooltip tooltip="Click to expand to full screen">
+            <Icon />
+          </StyledTooltip>
+        </StyledIconButton>,
+      );
+      // The issue's own repro, verbatim. Non-empty is the defect.
+      expect(container.querySelectorAll('button [tabindex="0"]')).toHaveLength(0);
+      expect(
+        container.querySelectorAll(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).toHaveLength(1);
+    });
+
+    it("keeps the button's accessible name, and gives the wrapper none", () => {
+      const { container } = render(
+        <StyledIconButton aria-label="Expand">
+          <StyledTooltip tooltip="Click to expand to full screen">
+            <Icon />
+          </StyledTooltip>
+        </StyledIconButton>,
+      );
+      expect(screen.getByRole("button", { name: "Expand" })).toBeInTheDocument();
+      const wrapper = container.querySelector("button > div")!;
+      expect(wrapper).not.toHaveAttribute("role");
+      expect(wrapper).not.toHaveAttribute("aria-label");
+    });
   });
 
   it("forwards a ref", () => {
