@@ -711,6 +711,25 @@ as hover, moves `aria-describedby` onto whatever actually receives focus, and
 declines to invent a name when an ancestor already provides one. All three are
 there because the naive version was shipped first and was wrong.
 
+**"Does anything else own the tab stop?" is a question about BOTH directions
+(NEH-950).** `StyledTooltip` asks whether its child is focusable so it can
+decline a stop the child already provides. Asking only downwards was wrong by
+exactly one relationship: an icon that carries its own tooltip, rendered inside
+a `StyledIconButton`, put a focusable `<div>` with no role and no name *inside*
+a button the reader had already passed — the same silent second stop the
+downward check exists to prevent, one level in. It reproduced on every icon
+button in every consumer, and no test saw it because neither component is wrong
+alone; only the assembly is.
+
+Two things generalise from the fix. **A focusable ancestor counts, and it is
+found with `parentElement.closest()`** — `node.closest()` would match the very
+`tabindex` being decided and make the answer depend on the previous render.
+And **removing a tab stop is only half a fix**: the content behind it has to
+stay reachable by keyboard (WCAG 2.2 2.1.1), so the ancestor becomes the
+trigger. That needs a real `focusin`/`focusout` listener on the ancestor,
+because focus events bubble *up* — a focusable child needs no such thing and a
+focusable ancestor cannot do without it.
+
 **Touch is handled (0.9.0).** A hover trigger on a device that cannot hover is
 not degraded, it is *unreachable* — there is no hover event, and tapping the
 control activates it rather than explaining it. `StyledTooltip` therefore asks
