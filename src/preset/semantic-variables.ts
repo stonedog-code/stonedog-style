@@ -154,13 +154,30 @@ const COLOR_TOKENS: TokenMap = {
  * with a sensible default so every project can adopt it immediately — applied
  * to the case where a default is genuinely knowable.
  *
- * ## The percentages are measured, not chosen
+ * ## `textMuted` is measured. `textSubtle` is still only chosen (NEH-974)
  *
  * Alpha de-emphasis trades contrast for hierarchy, and past some point it
- * trades away legibility. `emphasis-contrast.ct.tsx` measures both tiers
- * against the harness theme in a real browser and asserts they clear WCAG AA
- * (4.5:1); the values below are what passed. A host that wants a stronger or
- * weaker step defines the property.
+ * trades away legibility, so these percentages want measuring rather than
+ * picking.
+ *
+ * This comment claimed both tiers were measured by a file called
+ * `emphasis-contrast.ct.tsx`, **and no such file has ever existed** — the whole
+ * repo contains exactly one reference to that name, this one. A documented
+ * guard nobody implemented is worse than an absent one: it is a guard everybody
+ * believes in, and it is what made "the values below are what passed" read as a
+ * measurement rather than as a guess.
+ *
+ * What is true today: `components/StyledFieldHelp.contrast.ct.tsx` measures
+ * **`textMuted`** in a real browser, composited over the surface it actually
+ * paints on rather than over the page, and asserts WCAG 1.4.3 AA (4.5:1). On
+ * the harness theme it clears comfortably — 11.7:1 on the page, 9.1:1 on an
+ * opaque card, 8.2:1 on a translucent chip over that card.
+ *
+ * **`textSubtle` at 64% is not measured anywhere.** It is the tier closer to
+ * the legibility floor, so it is the one that needed the check more. Tracked;
+ * do not restore the claim that it passed something.
+ *
+ * A host that wants a stronger or weaker step defines the property.
  */
 const EMPHASIS_TOKENS: Record<string, [suffix: string, fallback: string]> = {
   /** Secondary information: still read, just not first. */
