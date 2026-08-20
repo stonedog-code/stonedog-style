@@ -147,3 +147,28 @@ export function stepUpFontSize(size: FontSizeKey, steps = 1): FontSizeKey {
   // clamp fails safe instead of returning undefined to a caller typed otherwise.
   return next ?? size;
 }
+
+/**
+ * The next size DOWN, clamped at the bottom of the scale.
+ *
+ * The counterpart to `stepUpFontSize`, added for `StyledFieldHelp` (NEH-972),
+ * and the clamp is the load-bearing half. Inline help is deliberately one tier
+ * below the text it accompanies — but "one tier below" must never mean "below
+ * the smallest tier the host offers", because the reader who has turned their
+ * text size all the way down is the reader with the least room to spare. At
+ * `xs` this returns `xs`, so help matches the body text rather than shrinking
+ * past it.
+ *
+ * Steps through `FONT_SIZE_ORDER`, so it moves through whatever scale the host
+ * has pinned its `--font-sizes-*` properties to rather than through a fixed set
+ * of pixel values.
+ */
+export function stepDownFontSize(size: FontSizeKey, steps = 1): FontSizeKey {
+  const index = FONT_SIZE_ORDER.indexOf(size);
+  if (index === -1) return size;
+  const next = FONT_SIZE_ORDER[Math.max(index - steps, 0)];
+  // Clamped into range above, so this cannot miss — but staying total means a
+  // future change to the clamp fails safe rather than handing a caller
+  // `undefined` from a function typed otherwise. Same shape as stepUpFontSize.
+  return next ?? size;
+}

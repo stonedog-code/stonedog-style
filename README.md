@@ -629,6 +629,55 @@ Scroll mode needs a height to scroll inside: `StyledScrollbar` is
 height (`display: flex; flex-direction: column; height: …`). Unconstrained, the
 rail simply grows — which is correct, and is not a bug.
 
+## Form help — `StyledFieldHelp`
+
+Permanent explanatory text for a field: below the label, above the control,
+always visible.
+
+```tsx
+<StyledFormLabel htmlFor="dose">Dose</StyledFormLabel>
+<StyledFieldHelp htmlFor="dose">
+  Milligrams per tablet, as printed on the bottle.
+</StyledFieldHelp>
+<StyledInputText id="dose" />
+```
+
+It is **text, and nothing else** — no trigger, no disclosure, no popover, no
+preference. That is the design rather than a simplification, and it is what the
+guarantees below rest on.
+
+### What it guarantees
+
+- **Zero tab stops.** Nothing here is focusable, so explaining a hundred fields
+  costs the keyboard nothing. The pattern this replaces put a help *button*
+  beside every explained control, which roughly doubled keyboard traversal on a
+  busy form and cannot be fixed while a per-control control remains: taking the
+  buttons out of the tab order loses the help for sighted keyboard users
+  instead.
+- **The control's `aria-describedby` points at it**, so a screen reader
+  announces the words as the field's description rather than reading them as
+  stray prose further down the page. The component sets the attribute itself,
+  merging with any description the control already had and removing only its own
+  id when it unmounts — so a call site that forgets still gets the association.
+  `fieldHelpId("dose")` is `"dose-help"`, exported so a host can put the
+  attribute in server-rendered markup instead; the component notices and stands
+  down.
+- **No pointer is involved**, which sidesteps WCAG 1.4.13 (Content on Hover or
+  Focus) rather than trying to satisfy it. Touch, mouse and keyboard all get the
+  same words with no gesture and no setting.
+- **One tier below the app-wide text size, and never below the smallest tier**
+  the host offers. A reader who has already turned their text down is the one
+  with the least room to spare.
+- **Contrast is measured, not assumed.** The colour is the emphasis token
+  `textMuted`, which is `currentColor`-relative, so it de-emphasises correctly
+  on a light theme and a dark one. The component tests composite the whole
+  ancestor chain — every translucent layer, not the page background — and assert
+  WCAG 1.4.3 AA against the surface the text really paints on. Measuring against
+  the page is how text on a tinted chip gets a confident, wrong pass.
+
+`children` is typed `ReactNode` for formatting — a unit, a `<strong>`, a line
+break. Putting a control in there defeats the only promise the component makes.
+
 ## Adopting a component as it is migrated
 
 Components move out of HopperGuard into this package one at a time.

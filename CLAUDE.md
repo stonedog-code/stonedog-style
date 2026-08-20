@@ -730,6 +730,68 @@ trigger. That needs a real `focusin`/`focusout` listener on the ancestor,
 because focus events bubble *up* — a focusable child needs no such thing and a
 focusable ancestor cannot do without it.
 
+### Help that costs the keyboard nothing — `StyledFieldHelp` (NEH-972)
+
+`StyledTooltip`'s `HelpTrigger` is a `<button>`, so **the click-mode help
+pattern buys touch support with a tab stop per explained control**. In its
+largest consumer that is ~160 stops, twenty of them on one screen — roughly
+doubling keyboard traversal on a form. The two fixes above (NEH-769's placement,
+NEH-950's ancestor check) are both real and neither touches that, because
+**there is no fix for the tab-stop tax that keeps a per-control control**:
+removing the stop loses the help for sighted keyboard users who are not running
+a screen reader.
+
+`StyledFieldHelp` is the other answer — permanent text between the label and the
+control, with no trigger, no state and no preference. Three things about it are
+decisions rather than details:
+
+- **It wires `aria-describedby` itself**, imperatively, and derives the id
+  (`fieldHelpId("dose") === "dose-help"`). Text near a control is not a
+  description of it; a field with unassociated help *looks* explained and is
+  not. Deriving rather than `useId`-generating is what lets a host put the same
+  attribute in server-rendered markup — the component sees its id is already
+  there and stands down. Imperative rather than `cloneElement` for the reason
+  `StyledTooltip` records: a child that quietly drops the prop fails invisibly.
+- **The cleanup re-reads the attribute rather than restoring the string it
+  captured.** Something else — an error summary, a character counter — may have
+  added its own id in between, and restoring a stale value silently drops it.
+  `StyledTooltip` does restore verbatim; that is the older shape, not the better
+  one.
+- **`children` is `ReactNode` for formatting, not for controls.** The one
+  guarantee is zero focusable elements, and the component cannot enforce what a
+  caller nests inside it — so the guard asserts what the component itself
+  renders, and the type doc says the rest.
+
+### Contrast is measured against the COMPOSITED surface, never the page
+
+`StyledFieldHelp.contrast.ct.tsx` is the reference implementation, and it is
+worth copying rather than re-deriving. Reading `backgroundColor` off one element
+answers nothing when that element is transparent, and reading the *page*
+background is how a confident, wrong pass gets produced for text on a tinted
+chip. The method:
+
+1. walk `<html>` → the text element, in paint order;
+2. start a 1×1 canvas at the UA canvas colour and paint each ancestor's
+   `background-color` over it, letting the **browser** do the alpha
+   compositing — `rgba()`, `color-mix()` and `color(srgb …)` then all work
+   without the test knowing how any of them serialise;
+3. paint the element's own `color` over that and read the pixel back;
+4. compute the WCAG 2.x ratio from the two opaque results.
+
+Two things that keep it honest. **Assign a sentinel to `fillStyle` first**: a
+colour the canvas refuses leaves the previous value in place, so an unparseable
+colour would silently measure the wrong thing rather than fail. And **measure
+the wrong way on purpose too** — the suite computes the ratio against the page
+background as well and asserts the two answers disagree. On the harness theme
+the help reads 8.18:1 against its real surface and 1.04:1 against the page;
+without that assertion, a composite that quietly fell back to the page would
+pass every other test in the file.
+
+**The percentages behind `textMuted`/`textSubtle` were never measured**, despite
+`semantic-variables.ts` naming a `emphasis-contrast.ct.tsx` that has never
+existed in this repo. `textMuted` is measured now; `textSubtle` still is not
+(NEH-974). A documented guard nobody implemented is worse than an absent one.
+
 **Touch is handled (0.9.0).** A hover trigger on a device that cannot hover is
 not degraded, it is *unreachable* — there is no hover event, and tapping the
 control activates it rather than explaining it. `StyledTooltip` therefore asks

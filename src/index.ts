@@ -48,6 +48,7 @@ export {
   getFontSizeLabel,
   getFontSizeValue,
   stepUpFontSize,
+  stepDownFontSize,
   FONT_SIZE_ORDER,
 } from "./config/font-size";
 
@@ -196,6 +197,18 @@ export type { StyledTooltipProps } from "./components/StyledTooltip";
 // ---------------------------------------------------------------------------
 export { default as StyledFormLabel } from "./components/StyledFormLabel";
 export type { StyledFormLabelProps } from "./components/StyledFormLabel";
+
+/**
+ * Permanent inline help for a field — PRD-0037's replacement for the hover
+ * tooltip and its `?` button. `fieldHelpId` is exported so a host can put the
+ * `aria-describedby` association in server-rendered HTML.
+ */
+export {
+  default as StyledFieldHelp,
+  StyledFieldHelp as FieldHelp,
+  fieldHelpId,
+} from "./components/StyledFieldHelp";
+export type { StyledFieldHelpProps } from "./components/StyledFieldHelp";
 
 // ---------------------------------------------------------------------------
 // Components that were blocked on a runtime dependency until NEH-430 gave each
