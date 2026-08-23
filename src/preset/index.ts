@@ -27,6 +27,7 @@ import { stackRecipe } from "./recipes/stack";
 import { stripedRecipe } from "./recipes/striped";
 import { tagRecipe } from "./recipes/tag";
 import { textRecipe } from "./recipes/text";
+import { toastRecipe } from "./recipes/toast";
 import { tooltipRecipe } from "./recipes/tooltip";
 
 import {
@@ -56,8 +57,9 @@ export interface StonedogStylePresetOptions {
 /**
  * Every recipe, keyed by the name it is exported under in `styled-system/recipes`.
  *
- * Five of these (`alertRecipe`, `listRecipe`, `menuRecipe`, `inputBoolRecipe`,
- * `inputRadioRootRecipe`) are slot recipes declared with `defineSlotRecipe`.
+ * Six of these (`alertRecipe`, `listRecipe`, `menuRecipe`, `inputBoolRecipe`,
+ * `inputRadioRootRecipe`, `toastRecipe`) are slot recipes declared with
+ * `defineSlotRecipe`.
  * Panda accepts them here rather than under `slotRecipes` and generates them
  * correctly — verified against HopperGuard's own generated output. Moving them
  * to `slotRecipes` would be more "correct" by the docs and would change the
@@ -87,6 +89,7 @@ const recipes = {
   stripedRecipe,
   tagRecipe,
   textRecipe,
+  toastRecipe,
   tooltipRecipe,
 };
 
