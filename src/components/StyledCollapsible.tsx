@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useId, useState } from "react";
+import React from "react";
 import { styled } from "styled-system/jsx";
+import { useDisclosure } from "./useDisclosure";
 
 /**
  * A disclosure: a trigger that shows and hides a region.
@@ -82,41 +83,27 @@ const StyledCollapsible: React.FC<StyledCollapsibleProps> = ({
   triggerTestId,
   contentTestId,
 }) => {
-  const [uncontrolled, setUncontrolled] = useState(defaultOpen);
-
-  // Controlled the moment `open` is supplied, and uncontrolled otherwise —
-  // decided per render rather than latched at mount, because a host that
-  // switches between the two mid-life has a bug we should not paper over by
-  // silently ignoring the prop.
-  const isControlled = open !== undefined;
-  const isOpen = isControlled ? open : uncontrolled;
-
-  const contentId = useId();
-
-  const toggle = () => {
-    const next = !isOpen;
-    // The internal state moves even when controlled. If the host ignores the
-    // callback the component would otherwise appear dead to the pointer, and a
-    // control that does nothing when pressed is indistinguishable from a broken
-    // one — for this audience, the reader concludes the app is broken, not that
-    // they misread the affordance.
-    if (!isControlled) setUncontrolled(next);
-    onOpenChange?.(next);
-  };
+  // The mechanics live in `useDisclosure`, not here. This component is one
+  // ARRANGEMENT of a disclosure — a button with the trigger inside it, above
+  // the region — and a host whose control is already a button composes the
+  // same hook into its own layout instead of nesting one button in another
+  // (NEH-1100). Two arrangements, one implementation.
+  const { triggerProps, contentProps } = useDisclosure({
+    open,
+    defaultOpen,
+    onOpenChange,
+  });
 
   return (
     <>
       <CollapsibleTrigger
-        type="button"
-        onClick={toggle}
-        aria-expanded={isOpen}
-        aria-controls={contentId}
+        {...triggerProps}
         aria-label={ariaLabel}
         data-testid={triggerTestId}
       >
         {trigger}
       </CollapsibleTrigger>
-      <div id={contentId} hidden={!isOpen} data-testid={contentTestId}>
+      <div {...contentProps} data-testid={contentTestId}>
         {children}
       </div>
     </>
