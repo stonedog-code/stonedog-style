@@ -1,6 +1,6 @@
 {
   "name": "@stonedogcode/style",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "A Panda CSS design system: a themeable Panda preset plus the React components built on it.",
   "license": "Apache-2.0",
   "author": "StoneDogCode L.L.C.",
@@ -8,7 +8,7 @@
     "type": "git",
     "url": "git+https://github.com/stonedog-code/stonedog-style.git"
   },
-  "//publishConfig": "A SCOPED package defaults to access: restricted. Publishing one without this succeeds, prints nothing unusual, and then 404s for every consumer \u2014 which reads as a missing package rather than as a private one. It was not needed while the name was unscoped (those default to public), so it is new as of the scope migration and it is the single thing most likely to be forgotten in one.",
+  "//publishConfig": "A SCOPED package defaults to access: restricted. Publishing one without this succeeds, prints nothing unusual, and then 404s for every consumer — which reads as a missing package rather than as a private one. It was not needed while the name was unscoped (those default to public), so it is new as of the scope migration and it is the single thing most likely to be forgotten in one.",
   "publishConfig": {
     "access": "public"
   },
@@ -20,7 +20,7 @@
     "./preset": "./src/preset/index.ts",
     "./package.json": "./package.json"
   },
-  "//files": "The package ships SOURCE, so `src` has to go out whole \u2014 but only the part a consumer imports. Tests, Playwright component tests and their harnesses were 57 of 130 entries and never resolvable from any export, so every one of them was a file a consumer's Panda run had to be told to skip. `src/__tests__/published-package.test.ts` asserts this listing rather than this array: npm's own resolution of these negations is the only thing that decides what ships.",
+  "//files": "The package ships SOURCE, so `src` has to go out whole — but only the part a consumer imports. Tests, Playwright component tests and their harnesses were 57 of 130 entries and never resolvable from any export, so every one of them was a file a consumer's Panda run had to be told to skip. `src/__tests__/published-package.test.ts` asserts this listing rather than this array: npm's own resolution of these negations is the only thing that decides what ships.",
   "files": [
     "src",
     "!src/**/__tests__/**",
@@ -38,7 +38,7 @@
     "pretype-check": "npm run panda:prepare",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext ts,tsx",
-    "//pretest": "panda:build, not panda:prepare \u2014 the token-contract suite asserts against the generated stylesheet, which cssgen produces and codegen alone does not.",
+    "//pretest": "panda:build, not panda:prepare — the token-contract suite asserts against the generated stylesheet, which cssgen produces and codegen alone does not.",
     "pretest": "npm run panda:build",
     "test": "jest",
     "pretest:ct": "npm run panda:build",
@@ -46,7 +46,7 @@
     "test:ct:ui": "playwright test --config playwright-ct.config.ts --ui",
     "test:coverage": "jest --coverage",
     "gate": "npm run type-check && npm run lint && npm run test",
-    "//publish:stonedog-style": "Publish to npm, end to end. Run from a terminal, interactively \u2014 npm prompts for the 2FA one-time password and the login flow needs a browser. It refuses a checkout that is detached, dirty, or behind origin/main: a submodule sits detached at the consumer's gitlink by default, and publishing from one commit behind ships a tarball missing the very thing you are publishing for while looking like a success (it did, on 2026-08-04, without TitleLogo.tsx). Runs the gate, prints the tarball listing, then proves the result by installing from the registry into a temp directory.",
+    "//publish:stonedog-style": "Publish to npm, end to end. Run from a terminal, interactively — npm prompts for the 2FA one-time password and the login flow needs a browser. It refuses a checkout that is detached, dirty, or behind origin/main: a submodule sits detached at the consumer's gitlink by default, and publishing from one commit behind ships a tarball missing the very thing you are publishing for while looking like a success (it did, on 2026-08-04, without TitleLogo.tsx). Runs the gate, prints the tarball listing, then proves the result by installing from the registry into a temp directory.",
     "publish:stonedog-style": "bash scripts/publish-package.sh",
     "version:bump:patch": "npm version patch --no-git-tag-version",
     "version:bump:minor": "npm version minor --no-git-tag-version",

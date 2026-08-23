@@ -315,3 +315,19 @@ export { DL_VARIANTS } from "./components/StyledDefinitionList";
 
 export { default as StyledSparkLine } from "./components/StyledSparkLine";
 export type { StyledSparkLineProps } from "./components/StyledSparkLine";
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+export { default as StyledToaster, StyledToaster as Toaster } from "./components/StyledToaster";
+export type { StyledToasterProps } from "./components/StyledToaster";
+
+export { createToaster, DEFAULT_DURATIONS } from "./components/toaster-store";
+export type {
+  Toast,
+  ToastAction,
+  ToastOptions,
+  ToastType,
+  ToasterStore,
+  ToasterStoreOptions,
+} from "./components/toaster-store";
