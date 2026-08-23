@@ -331,3 +331,11 @@ export type {
   ToasterStore,
   ToasterStoreOptions,
 } from "./components/toaster-store";
+
+export { default as useDisclosure } from "./components/useDisclosure";
+export type {
+  Disclosure,
+  DisclosureContentProps,
+  DisclosureTriggerProps,
+  UseDisclosureOptions,
+} from "./components/useDisclosure";
