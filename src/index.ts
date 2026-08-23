@@ -210,6 +210,16 @@ export {
 } from "./components/StyledFieldHelp";
 export type { StyledFieldHelpProps } from "./components/StyledFieldHelp";
 
+/**
+ * A file dropzone with image previews. Ships no artwork: both glyph slots
+ * default to nothing and the host passes its own icon set if it wants one.
+ */
+export {
+  default as StyledImageUpload,
+  StyledImageUpload as ImageUpload,
+} from "./components/StyledImageUpload";
+export type { StyledImageUploadProps } from "./components/StyledImageUpload";
+
 // ---------------------------------------------------------------------------
 // Components that were blocked on a runtime dependency until NEH-430 gave each
 // a seam with a working default. None of them adds a dependency; the host
@@ -315,6 +325,18 @@ export { DL_VARIANTS } from "./components/StyledDefinitionList";
 
 export { default as StyledSparkLine } from "./components/StyledSparkLine";
 export type { StyledSparkLineProps } from "./components/StyledSparkLine";
+
+/**
+ * A data table that renders real `<table>` markup rather than a div grid — the
+ * table role is what carries row and column position to a screen reader.
+ */
+export { default as StyledTable, StyledTable as Table } from "./components/StyledTable";
+export type {
+  StyledTableProps,
+  StyledTableHeaderProps,
+  StyledTableBodyProps,
+  ColumnDefinition,
+} from "./components/StyledTable";
 
 // ---------------------------------------------------------------------------
 // Notifications
