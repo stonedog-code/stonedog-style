@@ -1,6 +1,6 @@
 {
   "name": "@stonedogcode/style",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "description": "A Panda CSS design system: a themeable Panda preset plus the React components built on it.",
   "license": "Apache-2.0",
   "author": "StoneDogCode L.L.C.",
