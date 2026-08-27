@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "project": "stonedog-style",
+  "//integration": "The integration tier is deliberately OMITTED rather than declared empty. Omitting says nobody has decided; declaring it empty would claim this project has consciously chosen to have none. Those are different facts and the fleet view renders them differently.",
+  "tiers": {
+    "unit": {
+      "include": [
+        "src/**/__tests__/**/*.test.ts",
+        "src/**/__tests__/**/*.test.tsx"
+      ]
+    },
+    "e2e": {
+      "include": ["src/**/*.ct.tsx"]
+    }
+  }
+}
