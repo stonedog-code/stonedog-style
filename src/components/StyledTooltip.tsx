@@ -227,6 +227,59 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
   const [focusableAncestor, setFocusableAncestor] = useState<HTMLElement | null>(null);
 
   /**
+   * Whether the layout effect below has yet decided WHERE the click-mode help
+   * control belongs (NEH-965).
+   *
+   * The control is a real `<button>`, and until the trigger has been measured
+   * the component cannot know whether it is standing inside one. Rendering it
+   * optimistically and moving it afterwards is not an option: React validates
+   * DOM nesting at *render* time, against the React tree, so a single pass
+   * with `<button>` inside `<button>` warns and — on a server-rendered host
+   * like hopper-web — produces a hydration error, whatever the DOM ends up
+   * looking like a moment later.
+   *
+   * So the first pass renders no control at all and the second one puts it
+   * where it belongs. Both effects here are layout effects, so that settles
+   * before paint and before hydration compares anything: there is no frame in
+   * which a reader could see the control missing, and no server/client
+   * mismatch, because the server also renders nothing.
+   */
+  const [helpPlacementSettled, setHelpPlacementSettled] = useState(false);
+
+  /**
+   * The element the click-mode help control is rendered into when the trigger
+   * sits inside something focusable (NEH-965).
+   *
+   * `HelpTrigger` renders beside the child, inside the trigger wrapper. When
+   * the tooltipped thing is an icon inside an icon button that lands the
+   * control *inside* that button:
+   *
+   *     <button aria-label="Expand">   <- the consumer's control
+   *       <div>                        <- TooltipTrigger
+   *         <svg aria-hidden />
+   *         <button aria-label="More information">?</button>   <- invalid
+   *
+   * `<button>` cannot be a descendant of `<button>`, and this is not a
+   * preference anybody opted into: `isClick` is `trigger === "click" ||
+   * !canHover`, so it is the DEFAULT rendering on every phone and tablet.
+   *
+   * Simply not rendering the control would trade invalid HTML for an
+   * unreachable explanation — on a device that cannot hover there is no hover,
+   * and tapping the button activates it rather than explaining it. So the
+   * control moves *out* instead: a span inserted immediately after the
+   * focusable ancestor, portalled into. Valid HTML, still visible, still
+   * tappable, still in the tab sequence, and it scrolls with the page because
+   * it sits in normal flow rather than being positioned over anything.
+   *
+   * `inline-flex` on the host rather than `display: contents`: contents would
+   * let the control participate in the ancestor's parent layout directly, but
+   * it was removed from the accessibility tree by browsers this package's
+   * audience is still using, and an invisible help control is the bug we are
+   * fixing.
+   */
+  const [helpHost, setHelpHost] = useState<HTMLElement | null>(null);
+
+  /**
    * True when something else — a descendant or an ancestor — already puts this
    * trigger's content in the tab sequence. When it does, the trigger must add
    * no stop of its own, and must not invent a role or a name for one.
@@ -287,6 +340,10 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
       ? null
       : node?.parentElement?.closest<HTMLElement>(FOCUSABLE_SELECTOR) ?? null;
     setFocusableAncestor((prev) => (prev === ancestor ? prev : ancestor));
+    // Measured — the next render may place the help control (NEH-965). Set
+    // before the `!node` bail so a trigger that never mounted a node does not
+    // leave click mode permanently without its control.
+    setHelpPlacementSettled(true);
 
     if (!node) return;
 
@@ -299,9 +356,21 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
       .join(" ")
       .replace(/\s+/g, " ")
       .trim();
+    // With a focusable ancestor the help control is rendered OUTSIDE it
+    // (NEH-965), so the ancestor no longer supplies context by containment and
+    // the control has to carry the subject in its own name. "More information"
+    // sitting on its own next to a button called "Expand" names nothing —
+    // which is the twenty-identical-controls problem NEH-769 fixed for the
+    // inline case, reappearing one level up.
+    const ancestorText = ancestor
+      ? (ancestor.getAttribute("aria-label") ?? ancestor.textContent ?? "")
+          .replace(/\s+/g, " ")
+          .trim()
+      : "";
+    const subject = ownText || ancestorText;
     // Long enough to distinguish twenty controls, short enough that a screen
     // reader does not read a paragraph before the reader can act on it.
-    setSubjectLabel(ownText.length > 80 ? `${ownText.slice(0, 80).trimEnd()}…` : ownText);
+    setSubjectLabel(subject.length > 80 ? `${subject.slice(0, 80).trimEnd()}…` : subject);
 
     // parentElement, not the node itself: closest() would match our own
     // aria-label once we set one, and the answer would flip every render.
@@ -360,6 +429,31 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
       node.removeEventListener("focusout", hide);
     };
   }, [focusableAncestor, isClick, show, hide]);
+
+  /**
+   * Insert the host for the portalled help control, immediately after the
+   * focusable ancestor (NEH-965). A layout effect, so the control is in place
+   * before paint.
+   */
+  useLayoutEffect(() => {
+    if (!isClick || !focusableAncestor || typeof document === "undefined") {
+      setHelpHost(null);
+      return;
+    }
+    const host = document.createElement("span");
+    // Named so a consumer reading the DOM can see whose node this is, and so a
+    // test can assert the control landed outside the ancestor rather than
+    // merely that it exists somewhere.
+    host.setAttribute("data-stonedog-tooltip-help-host", "");
+    host.style.display = "inline-flex";
+    host.style.verticalAlign = "middle";
+    focusableAncestor.after(host);
+    setHelpHost(host);
+    return () => {
+      host.remove();
+      setHelpHost(null);
+    };
+  }, [isClick, focusableAncestor]);
 
   useLayoutEffect(() => {
     if (visible && triggerRef.current && tooltipRef.current) {
@@ -566,19 +660,40 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
   const resolvedHelpLabel =
     helpLabel ?? (subjectLabel ? `Help: ${subjectLabel}` : "More information");
 
-  const helpControl = isClick ? (
-    <HelpTrigger
-      ref={helpRef}
-      type="button"
-      side={helpGoesFirst ? "before" : "after"}
-      aria-label={resolvedHelpLabel}
-      aria-expanded={visible}
-      aria-controls={visible ? tooltipId : undefined}
-      onClick={() => setVisible((open) => !open)}
-    >
-      ?
-    </HelpTrigger>
-  ) : null;
+  /**
+   * The click-mode control — rendered only once its home is known, see
+   * `helpPlacementSettled`.
+   *
+   * `stopPropagation` is load-bearing rather than defensive. A React portal
+   * bubbles its events through the REACT tree, not the DOM tree, so once this
+   * control is portalled out of the icon button it is still, as far as React
+   * is concerned, inside it — and a press on "?" would fire the button's own
+   * `onClick`. That is precisely the collision this fix exists to remove, so
+   * it is stopped for the inline case too: pressing "?" asks for an
+   * explanation, and must never also do the thing being explained.
+   */
+  const helpControl =
+    isClick && helpPlacementSettled ? (
+      <HelpTrigger
+        ref={helpRef}
+        type="button"
+        side={helpGoesFirst ? "before" : "after"}
+        aria-label={resolvedHelpLabel}
+        aria-expanded={visible}
+        aria-controls={visible ? tooltipId : undefined}
+        onMouseDown={(event: React.MouseEvent) => event.stopPropagation()}
+        onClick={(event: React.MouseEvent) => {
+          event.stopPropagation();
+          setVisible((open) => !open);
+        }}
+      >
+        ?
+      </HelpTrigger>
+    ) : null;
+
+  // Inside a focusable ancestor the control is portalled out to `helpHost`;
+  // everywhere else it stays where it has always been, beside the child.
+  const inlineHelpControl = focusableAncestor ? null : helpControl;
 
   return (
     <>
@@ -628,10 +743,11 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
         aria-describedby={!insideFocusable && visible ? tooltipId : undefined}
         {...rest}
       >
-        {helpGoesFirst && helpControl}
+        {helpGoesFirst && inlineHelpControl}
         {children}
-        {!helpGoesFirst && helpControl}
+        {!helpGoesFirst && inlineHelpControl}
       </TooltipTrigger>
+      {helpControl && helpHost && createPortal(helpControl, helpHost)}
       {visible && typeof document !== "undefined" &&
         createPortal(
           <TooltipContent

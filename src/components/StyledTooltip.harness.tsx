@@ -23,6 +23,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import StyledTooltip from "./StyledTooltip";
+import StyledIconButton from "./StyledIconButton";
 
 function Dialog({
   open,
@@ -112,6 +113,38 @@ export default function TooltipOrphan({ unmountTriggerOnPress = false }: Tooltip
       <output data-testid="landed-on" style={{ position: "fixed", bottom: 0, left: 0 }}>
         {landedOn}
       </output>
+    </div>
+  );
+}
+
+/**
+ * Harness for the click-mode nesting case (NEH-965).
+ *
+ * A tooltipped icon inside an icon button, in click mode — the arrangement
+ * every phone and tablet gets by default, because `isClick` is
+ * `trigger === "click" || !canHover`.
+ *
+ * The pressed counter is here rather than in the spec because CT mounts into a
+ * separate browser bundle: mounted JSX cannot close over the spec's scope, so
+ * a handler that has to be observed has to live with the component.
+ */
+export function TooltipInsideIconButton() {
+  const [pressed, setPressed] = React.useState(0);
+
+  return (
+    <div style={{ padding: "24px" }}>
+      <StyledIconButton
+        aria-label="Expand"
+        data-testid="icon-button"
+        onClick={() => setPressed((n) => n + 1)}
+      >
+        <StyledTooltip tooltip="Click to expand to full screen" trigger="click">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16">
+            <rect x="2" y="2" width="12" height="12" fill="currentColor" />
+          </svg>
+        </StyledTooltip>
+      </StyledIconButton>
+      <output data-testid="pressed">{pressed}</output>
     </div>
   );
 }
