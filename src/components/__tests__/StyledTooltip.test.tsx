@@ -566,3 +566,118 @@ describe("inside a focusable ancestor", () => {
     ).toHaveAttribute("tabindex", "0");
   });
 });
+
+/**
+ * Click mode inside a focusable ancestor (NEH-965).
+ *
+ * The hover-mode guard above cannot see this. It asks about tab stops, and
+ * click mode never took one — the defect here is structural: `HelpTrigger` is
+ * a real `<button>` rendered beside the child, inside the trigger wrapper, so
+ * when the tooltipped thing is an icon inside an icon button the control lands
+ * INSIDE that button. `<button>` cannot be a descendant of `<button>`; React
+ * warns, and on a server-rendered host it is a hydration error.
+ *
+ * `isClick` is `trigger === "click" || !canHover`, so this is not a preference
+ * anybody opted into: it is the default rendering on every phone and tablet.
+ *
+ * Measured against the pre-fix component with the issue's own repro:
+ * 4 elements, 2 buttons, **1 nested**.
+ *
+ * The other half of "done" is that removing the nesting must not remove the
+ * explanation. On a device that cannot hover there is no hover to fall back
+ * on, so a control that is merely absent leaves the help rendered, correct and
+ * impossible to reach — which is why the reachability assertions below sit in
+ * the same block as the structural one rather than somewhere else.
+ */
+describe("click mode inside a focusable ancestor (NEH-965)", () => {
+  function renderInsideButton(onClick?: () => void) {
+    return render(
+      <button type="button" aria-label="Expand" onClick={onClick}>
+        <StyledTooltip tooltip="Click to expand to full screen" trigger="click">
+          {/* The issue's own repro: a decorative icon with no text of its
+              own, which is what every stonedog-icons glyph renders. */}
+          <svg aria-hidden="true" />
+        </StyledTooltip>
+      </button>,
+    );
+  }
+
+  it("renders no button inside a button", () => {
+    const { container } = renderInsideButton();
+
+    // The input-set size, asserted rather than assumed. A query over an empty
+    // container finds no nested buttons and passes exactly like a correct
+    // render, so "0 nested" is only meaningful next to "and here is how much
+    // there was to look at". Pre-fix this render was 4 elements / 2 buttons /
+    // 1 nested; post-fix it is 5 / 2 / 0 — the extra element is the host span
+    // the control was moved into.
+    expect(container.querySelectorAll("*").length).toBeGreaterThanOrEqual(4);
+    expect(container.querySelectorAll("button")).toHaveLength(2);
+    expect(container.querySelectorAll("button button")).toHaveLength(0);
+  });
+
+  it("puts the help control outside the ancestor, not nowhere", () => {
+    // The failure this guards against is the one-line "fix": stop rendering the
+    // control when there is a focusable ancestor. That gives valid HTML and an
+    // unreachable explanation, and it passes the assertion above.
+    const { container } = renderInsideButton();
+    const ancestor = screen.getByRole("button", { name: "Expand" });
+    const help = screen.getByRole("button", { name: /^Help:/ });
+
+    expect(container).toContainElement(help);
+    expect(ancestor).not.toContainElement(help);
+  });
+
+  it("names the control after the ancestor, which no longer contains it", () => {
+    // Outside the button, "More information" names nothing — the twenty
+    // identical controls of NEH-769, one level up.
+    renderInsideButton();
+    expect(
+      screen.getByRole("button", { name: "Help: Expand" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the tooltip when the control is pressed", () => {
+    renderInsideButton();
+    fireEvent.click(screen.getByRole("button", { name: "Help: Expand" }));
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "Click to expand to full screen",
+    );
+  });
+
+  it("does not fire the ancestor's own action", () => {
+    // A React portal bubbles through the REACT tree, not the DOM tree, so the
+    // moved control is still inside the button as far as React is concerned.
+    // Without stopPropagation, asking for the explanation would also do the
+    // thing being explained.
+    const onClick = jest.fn();
+    renderInsideButton(onClick);
+    fireEvent.click(screen.getByRole("button", { name: "Help: Expand" }));
+    expect(onClick).not.toHaveBeenCalled();
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+  });
+
+  it("describes the ancestor, because that is what receives focus", () => {
+    renderInsideButton();
+    fireEvent.click(screen.getByRole("button", { name: "Help: Expand" }));
+    expect(screen.getByRole("button", { name: "Expand" })).toHaveAttribute(
+      "aria-describedby",
+      screen.getByRole("tooltip").id,
+    );
+  });
+
+  it("still renders the control in place when nothing focusable encloses it", () => {
+    // The move is conditional. A plain click-mode tooltip must keep the
+    // control beside its subject, where NEH-769 put it.
+    const { container } = render(
+      <StyledTooltip tooltip="How this is used" trigger="click">
+        <label>Require PIN</label>
+      </StyledTooltip>,
+    );
+    const wrapper = container.firstElementChild!;
+    expect(wrapper).toContainElement(
+      screen.getByRole("button", { name: "Help: Require PIN" }),
+    );
+    expect(container.querySelectorAll("[data-stonedog-tooltip-help-host]")).toHaveLength(0);
+  });
+});

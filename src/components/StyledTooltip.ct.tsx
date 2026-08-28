@@ -43,7 +43,7 @@
  */
 import { test, expect } from "@playwright/experimental-ct-react";
 import type { Page } from "@playwright/test";
-import TooltipOrphan from "./StyledTooltip.harness";
+import TooltipOrphan, { TooltipInsideIconButton } from "./StyledTooltip.harness";
 
 /**
  * The human sequence: press the button, then take the pointer away.
@@ -162,5 +162,72 @@ test.describe("a tooltip whose trigger is pressed", () => {
     await pressThenLeave(page);
 
     await expect(page.locator('[role="tooltip"]')).toHaveCount(0);
+  });
+});
+
+/**
+ * Click mode inside an icon button (NEH-965).
+ *
+ * The unit tier already pins the DOM structure — no `<button>` inside a
+ * `<button>`, and the control still present and still named. What it cannot
+ * pin is whether the control that was moved out is a control anyone can
+ * actually use: jsdom reports every box as zero-sized, so "the help is
+ * reachable on a device that cannot hover" is unanswerable there. A control
+ * rendered under the button, off the edge of the layout, or at 6px square
+ * would pass every assertion in the jest suite.
+ *
+ * Measured against the pre-fix component: the control rendered INSIDE the
+ * button, so `button button` found one and a press on "?" also fired the
+ * button's own action.
+ */
+test.describe("a click-mode tooltip inside an icon button", () => {
+  test("renders no button inside a button", async ({ mount, page }) => {
+    await mount(<TooltipInsideIconButton />);
+    await expect(page.getByRole("button", { name: "Help: Expand" })).toBeVisible();
+
+    // The input-set size next to the assertion: two buttons is what a correct
+    // render has, and "none nested" over an empty page would pass too.
+    expect(await page.locator("button").count()).toBe(2);
+    expect(await page.locator("button button").count()).toBe(0);
+  });
+
+  test("keeps the moved control at the 48x48 tap-target floor", async ({ mount, page }) => {
+    await mount(<TooltipInsideIconButton />);
+    const box = (await page.getByRole("button", { name: "Help: Expand" }).boundingBox())!;
+    expect(box.width).toBeGreaterThanOrEqual(48);
+    expect(box.height).toBeGreaterThanOrEqual(48);
+  });
+
+  test("sits beside the button rather than on top of it", async ({ mount, page }) => {
+    // Moving the control out of the button is only a fix if it lands somewhere
+    // a finger can reach it without hitting the button instead. Overlap is the
+    // failure mode a portal positioned over the ancestor would have.
+    await mount(<TooltipInsideIconButton />);
+    const button = (await page.getByTestId("icon-button").boundingBox())!;
+    const help = (await page.getByRole("button", { name: "Help: Expand" }).boundingBox())!;
+
+    const overlapsHorizontally =
+      help.x < button.x + button.width && button.x < help.x + help.width;
+    const overlapsVertically =
+      help.y < button.y + button.height && button.y < help.y + help.height;
+    expect(overlapsHorizontally && overlapsVertically).toBe(false);
+  });
+
+  test("explains without also doing the thing being explained", async ({ mount, page }) => {
+    // The whole point on a device that cannot hover: tapping the button
+    // activates it, so the explanation needs a target of its own — and that
+    // target must not activate the button. A React portal bubbles through the
+    // React tree, so without stopPropagation it would.
+    await mount(<TooltipInsideIconButton />);
+    await page.getByRole("button", { name: "Help: Expand" }).click();
+
+    await expect(page.locator('[role="tooltip"]')).toHaveText(
+      "Click to expand to full screen",
+    );
+    await expect(page.getByTestId("pressed")).toHaveText("0");
+
+    // And the button still works on its own.
+    await page.getByTestId("icon-button").click();
+    await expect(page.getByTestId("pressed")).toHaveText("1");
   });
 });
