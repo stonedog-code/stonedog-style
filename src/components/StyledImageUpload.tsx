@@ -68,25 +68,80 @@ const PandaItemGroup = styled("div", {
 });
 const PandaItem = styled("div", { base: { position: "relative" } });
 
-/** Chakra's `Float` — the delete control at the item's top-end corner. */
+/**
+ * Chakra's `Float` — the delete control at the item's top-end corner.
+ *
+ * The `translate(40%, -40%)` this used to carry is gone (NEH-1117). It centred
+ * the control ON the corner, so roughly half of it hung outside the preview it
+ * belonged to — measured in Chromium at every viewport, the control's top edge
+ * sat at **y = -7.2**, above the top of the page. That is tolerable while the
+ * control is 16px and merely untidy; at the 48px hit area below it would put
+ * two neighbouring previews' targets into the same few pixels, which is the
+ * sharper half of what the issue reports.
+ *
+ * So the hit area is anchored inside the tile instead, and the visible chip
+ * sits in its top-end corner — which lands the chip in very nearly the place
+ * it occupied before, without anything overhanging.
+ */
 const PandaFloat = styled("div", {
   base: {
     position: "absolute",
     top: "0",
     right: "0",
-    transform: "translate(40%, -40%)",
   },
 });
 
 /**
+ * The hit area — and only the hit area.
+ *
  * `boxSize="4"` and `layerStyle="fill.solid"` were Chakra props with no Panda
- * equivalent — they do not exist on a `styled("button")` and the type-check
- * rejects both. Their effect is reproduced as real styles.
+ * equivalent; their effect is reproduced as real styles. What was NOT
+ * reproduced was a tap target: `boxSize="4"` is **16x16 CSS px**, a third of
+ * this package's stated 48x48 floor, and it came across the extraction
+ * unchanged (NEH-1116) because changing it changes HopperGuard's rendering.
+ * This is that change.
+ *
+ * The split is `StyledTag`'s, which solves the same tension: the BUTTON is the
+ * target and carries no appearance at all, and the chip inside it is what a
+ * reader sees. Sizing the visible circle to 48px instead would put a control
+ * half the width of the 96px preview on top of it.
+ *
+ * `StyledTag` needs negative block margin to stop the target growing its own
+ * tag; here the control is absolutely positioned, so it is already out of
+ * flow and cannot drag the preview's layout with it whatever size it is. The
+ * component test asserts the preview stays 96x96 rather than trusting that.
+ */
+const PandaDeleteTrigger = styled("button", {
+  base: {
+    display: "inline-flex",
+    // Top-end, not centred: the chip keeps the corner position it has always
+    // had, and the extra target grows inwards over the preview — which is
+    // decorative, and the only direction with room.
+    alignItems: "flex-start",
+    justifyContent: "flex-end",
+    // The house floor, stated rather than left to emerge from whatever glyph
+    // a consumer passes — see CLAUDE.md. 48 rather than WCAG 2.5.5 AAA's 44,
+    // because the standard is calibrated for the general population and this
+    // library's largest consumer serves an often-elderly, sometimes
+    // motor-impaired audience.
+    minWidth: "48px",
+    minHeight: "48px",
+    padding: "0",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+  },
+});
+
+/**
+ * What a reader actually sees: the small round chip that used to BE the
+ * button. Same size, same tokens, same appearance — it is now a passenger
+ * inside a target big enough to hit.
  *
  * The colours are tokens, never literals, so the control follows the host's
  * theme and colour mode.
  */
-const PandaDeleteTrigger = styled("button", {
+const PandaDeleteChip = styled("span", {
   base: {
     display: "inline-flex",
     alignItems: "center",
@@ -94,7 +149,6 @@ const PandaDeleteTrigger = styled("button", {
     width: "4",
     height: "4",
     borderRadius: "full",
-    cursor: "pointer",
     lineHeight: "1",
     bg: "boxBgPrimary",
     color: "textPrimary",
@@ -207,9 +261,7 @@ const FileUploadPreviewOnly = ({
               aria-label={`Remove ${file.name}`}
               onClick={() => removeFile(file)}
             >
-              {removeIcon ? (
-                <span aria-hidden="true">{removeIcon}</span>
-              ) : null}
+              <PandaDeleteChip aria-hidden="true">{removeIcon}</PandaDeleteChip>
             </PandaDeleteTrigger>
           </PandaFloat>
         </PandaItem>
