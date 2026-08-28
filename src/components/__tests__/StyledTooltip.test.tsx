@@ -681,3 +681,76 @@ describe("click mode inside a focusable ancestor (NEH-965)", () => {
     expect(container.querySelectorAll("[data-stonedog-tooltip-help-host]")).toHaveLength(0);
   });
 });
+
+/**
+ * The moved control has to keep up with the thing it explains.
+ *
+ * The host span is inserted by this component, not rendered by React, so React
+ * does not move it when it moves the ancestor. A reordered row of icon buttons
+ * therefore left every help control behind at its old index — measured, before
+ * the fix:
+ *
+ *     before  BTN(Expand) HOST(Help: Expand) BTN(Collapse) HOST(Help: Collapse)
+ *     after   HOST(Help: Expand) BTN(Collapse) HOST(Help: Collapse) BTN(Expand)
+ *
+ * A help control beside the wrong button is worse than the nesting it
+ * replaced: the nesting was invalid HTML that still explained the right thing.
+ */
+describe("the moved help control follows its ancestor (NEH-965)", () => {
+  function Row({ order }: { order: string[] }) {
+    return (
+      <div data-testid="row">
+        {order.map((name) => (
+          <button type="button" key={name} aria-label={name}>
+            <StyledTooltip tooltip={`What ${name} does`} trigger="click">
+              <svg aria-hidden="true" />
+            </StyledTooltip>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  /** Each row child as `BTN(name)` or `HOST(name)`, in DOM order. */
+  function layout(container: HTMLElement): string[] {
+    return Array.from(
+      container.querySelector('[data-testid="row"]')!.children,
+    ).map((el) =>
+      el.tagName === "BUTTON"
+        ? `BTN(${el.getAttribute("aria-label")})`
+        : `HOST(${el.querySelector("button")?.getAttribute("aria-label")})`,
+    );
+  }
+
+  it("stays immediately after its own button when the row is reordered", () => {
+    const { container, rerender } = render(<Row order={["Expand", "Collapse"]} />);
+
+    // The input-set size, stated: four children — two buttons and two hosts.
+    // An assertion about ordering over an empty row would pass.
+    expect(layout(container)).toEqual([
+      "BTN(Expand)",
+      "HOST(Help: Expand)",
+      "BTN(Collapse)",
+      "HOST(Help: Collapse)",
+    ]);
+
+    rerender(<Row order={["Collapse", "Expand"]} />);
+
+    expect(layout(container)).toEqual([
+      "BTN(Collapse)",
+      "HOST(Help: Collapse)",
+      "BTN(Expand)",
+      "HOST(Help: Expand)",
+    ]);
+  });
+
+  it("still opens the tooltip belonging to the button it now sits beside", () => {
+    // Position is not the claim on its own — the control has to still explain
+    // the right thing after the move.
+    const { rerender } = render(<Row order={["Expand", "Collapse"]} />);
+    rerender(<Row order={["Collapse", "Expand"]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Help: Expand" }));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("What Expand does");
+  });
+});
