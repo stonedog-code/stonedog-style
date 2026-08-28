@@ -455,6 +455,42 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
     };
   }, [isClick, focusableAncestor]);
 
+  /**
+   * Keep the host beside its ancestor when React MOVES the ancestor.
+   *
+   * The host is a node this component inserts, not one React renders, so React
+   * does not move it with the ancestor: reordering a row of icon buttons
+   * leaves every help control behind at its old index. Measured before fixing,
+   * two buttons swapped:
+   *
+   *     before  BTN(Expand) HOST(Help: Expand) BTN(Collapse) HOST(Help: Collapse)
+   *     after   HOST(Help: Expand) BTN(Collapse) HOST(Help: Collapse) BTN(Expand)
+   *
+   * — every control now beside the wrong button, which for an accessibility
+   * affordance is worse than the nesting it replaced.
+   *
+   * Re-running the effect above cannot catch this. Its dependency is the
+   * ancestor NODE, and a moved node is the same node, so nothing changes and
+   * nothing re-runs. Hence a deliberately dependency-free layout effect: it
+   * re-asserts the placement on every commit, before paint, and costs two DOM
+   * property reads on a path that only exists in click mode inside a focusable
+   * ancestor.
+   *
+   * Scope worth stating rather than implying: this follows a move that
+   * RE-RENDERS this component, which is what a list reorder does. A subtree
+   * memoised so hard that React moves it without rendering it would not be
+   * followed. A `MutationObserver` on the parent would cover that too, and is
+   * deliberately not here — its callback is a microtask, so it could not be
+   * asserted in the tier that can see this at all, and an untested guard is
+   * the thing this package's rules are most emphatic about.
+   */
+  useLayoutEffect(() => {
+    if (!helpHost || !focusableAncestor) return;
+    if (!focusableAncestor.isConnected) return;
+    if (helpHost.previousSibling === focusableAncestor) return;
+    focusableAncestor.after(helpHost);
+  });
+
   useLayoutEffect(() => {
     if (visible && triggerRef.current && tooltipRef.current) {
       const triggerRect = triggerRef.current.getBoundingClientRect();
