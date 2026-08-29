@@ -155,13 +155,50 @@ export const buttonIconRecipe = defineRecipe({
           pointerEvents: "none",
         },
       },
+      /**
+       * The accent pairing again, and the gradient that was hiding it
+       * (NEH-881).
+       *
+       * This variant was filed as a different defect class: a FIXED dark
+       * `gray.800`→`gray.900` gradient painting over the accent fill in every
+       * theme, with a themed `textPrimary` glyph left dark-on-dark on top of
+       * it. The proposed fix was a deliberate literal `color: "white"`, as
+       * `box` and `input-bool` had already taken for their own `matte`.
+       *
+       * **There is no gradient.** `bgGradient` is Chakra v2 syntax; Panda has
+       * no such utility and no `linear()` shorthand, so it emitted
+       * `background-image: linear(to-b, gray.800, gray.900)` — not valid CSS,
+       * discarded at parse time by every engine. Chromium reads the element
+       * back as `background-image: none`, and the `background` shorthand
+       * emitted just above it had already reset `background-image` in any case.
+       *
+       * So the surface here has always been plain `buttonBgAccent`, and this is
+       * the ordinary NEH-796 / NEH-877 mispairing after all — `textPrimary` is
+       * the contract's partner for `boxBgPrimary`, not for an accent fill.
+       * Measured over nine host themes in both modes, 18 pairs: `textPrimary`
+       * is below WCAG AA on 8 of them, every one in dark mode, the worst at
+       * 2.15:1 (white on `#F59E0B`). `buttonTextAccent` is below AA on 0 of the
+       * 18, and reaches 9.78:1 on that same worst pair.
+       *
+       * Had `color: "white"` been taken as filed, it would have pinned the
+       * failing half of that measurement in place under a comment calling it
+       * deliberate — the shape where a test makes a bug unfixable by review.
+       *
+       * The dead declaration goes too, and that is not tidying. The pairing
+       * sweep in `variant-contrast-pairing.test.ts` reads `background-image`
+       * before `background`, so while the invalid gradient was emitted the
+       * guard took it as this variant's surface, found the token contract said
+       * nothing about it, and skipped the variant entirely. Removing it is what
+       * puts `matte` back under the guard that already covers its five
+       * siblings — verified by planting the old colour back and watching that
+       * guard name both selectors.
+       */
       matte: {
-        bgGradient: "linear(to-b, gray.800, gray.900)",
         borderColor: "gray.700",
         borderWidth: "1px",
         boxShadow: "md",
         bg: "buttonBgAccent",
-        color: "textPrimary",
+        color: "buttonTextAccent",
         borderRadius: "lg",
         fontWeight: "bold",
       },

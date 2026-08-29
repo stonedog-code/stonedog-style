@@ -133,13 +133,24 @@ export const buttonRecipe = defineRecipe({
           pointerEvents: "none",
         },
       },
+      /**
+       * The same correction `iconButton`'s `matte` takes, for the same reason
+       * (NEH-881) — see the long note there.
+       *
+       * NEH-881 named only `iconButton`. These two recipes are the same control
+       * in two shapes and their `matte` blocks were byte-identical, including
+       * the inert `bgGradient` that kept the pairing guard from inspecting
+       * either of them. Fixing one and leaving the other would ship the defect
+       * under a different class name, so both move together: the same 8-of-18
+       * measurement applies unchanged, because it is a property of the surface
+       * and the text token, not of the shape of the control.
+       */
       matte: {
-        bgGradient: "linear(to-b, gray.800, gray.900)",
         borderColor: "gray.700",
         borderWidth: "1px",
         boxShadow: "md",
         bg: "buttonBgAccent",
-        color: "textPrimary",
+        color: "buttonTextAccent",
         borderRadius: "lg",
         fontWeight: "bold",
       },

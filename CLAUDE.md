@@ -556,10 +556,44 @@ Still outstanding, inherited and **not** fixed: literal `gray.*`, `rgba(...)`,
 and `color: "black"` / `backgroundColor: "white"` in `recipes/input-text.ts`.
 These misread under dark and high-contrast themes. Fixing them changes rendering
 in a visible way, so it wants its own PR and a real look at the result. Note
-`box.ts` and `input-bool.ts` now carry a deliberate `color: "white"` on `matte`:
-that variant's surface is a *fixed* `gray.800`→`gray.900` gradient, so themed
-text on it renders dark-on-dark in a light theme. The literal is correct until
-the surface and the text move together, which is what that cleanup has to do.
+`box.ts` and `input-bool.ts` carry a deliberate `color: "white"` on `matte`,
+which this entry justified until 2026-08-29 by saying that variant's surface is
+a *fixed* `gray.800`→`gray.900` gradient. **Measured, there is no such gradient
+and there never was.**
+
+`bgGradient` is Chakra v2 syntax. Panda has no such utility and no `linear()`
+shorthand, so it passed the value through verbatim and emitted
+
+    background-image: linear(to-b, gray.800, gray.900);
+
+which is not valid CSS — `linear()` is an easing function, not an `<image>` —
+so every engine discards the declaration at parse time. Confirmed in Chromium
+against the generated stylesheet: the element reads back `background-image:
+none`. It is the same defect class this section already documents twice over
+(`bg: "buttonBgHover"`, `zIndex: "modal"`): a token or utility that does not
+exist, emitted verbatim, dropped by the browser, invisible to every gate.
+**Ten `bgGradient` declarations across seven recipes are dead this way** —
+`box`, `button`, `icon-button`, `input-bool`, `input-surface`, `list`,
+`separator`.
+
+Two things follow, and the first one cost a wrong diagnosis (NEH-881):
+
+- **This paragraph is what a reader reasons from, so it propagated.** NEH-881
+  was filed against the phantom gradient, complete with a ~1.1:1 figure that
+  cannot occur, and proposed pinning `color: "white"` — which measures 2.15:1
+  on the surface actually painted, i.e. the fix would have frozen the worst
+  pairing in place under a comment calling it deliberate.
+- **Where a `matte` variant also sets `bg`, the real surface is that `bg`.**
+  `button` and `icon-button` did, so both were plain accent-surface
+  mispairings and are fixed (NEH-881). `box` and `input-bool` set **no**
+  background at all once the dead declaration is discounted, so their
+  `color: "white"` now paints on whatever is behind them — a genuine
+  legibility hazard on a light page, and the opposite of what the comment
+  above it claims. That is untouched here and tracked separately.
+
+The remaining eight dead declarations are left in place deliberately: removing
+one changes what the pairing guard can see, so each wants its own look rather
+than a sweep.
 
 ### A `var()` value is unassertable in jsdom (NEH-406)
 
