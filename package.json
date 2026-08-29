@@ -49,6 +49,8 @@
     "//publish:stonedog-style": "Publish to npm, end to end. Run from a terminal, interactively — npm prompts for the 2FA one-time password and the login flow needs a browser. It refuses a checkout that is detached, dirty, or behind origin/main: a submodule sits detached at the consumer's gitlink by default, and publishing from one commit behind ships a tarball missing the very thing you are publishing for while looking like a success (it did, on 2026-08-04, without TitleLogo.tsx). Runs the gate, prints the tarball listing, then proves the result by installing from the registry into a temp directory.",
     "publish:stonedog-style": "bash scripts/publish-package.sh",
     "publishnpm": "npm run publish:stonedog-style",
+    "//release": "One memorable command per repo. It cannot be called `publish`: that is a reserved npm lifecycle name, so `npm publish` inside scripts/publish-package.sh would fire it and run the whole gate and publish a second time, hitting the already-published guard and reporting a successful release as a failure.",
+    "release": "npm run publish:stonedog-style",
     "version:bump:patch": "npm version patch --no-git-tag-version",
     "version:bump:minor": "npm version minor --no-git-tag-version",
     "audit": "npm audit --audit-level=moderate"
