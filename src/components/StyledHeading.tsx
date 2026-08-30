@@ -1,3 +1,30 @@
+"use client";
+
+/**
+ * `"use client"`, and it is load-bearing.
+ *
+ * This component calls `useFontSizeProfile()` (a client hook) during its
+ * render. Without the directive above, the module is a Server Component in a
+ * consumer's App Router tree, the hook is invoked on the server, and React
+ * throws:
+ *
+ *     Attempted to call useFontSizeProfile() from the server but
+ *     useFontSizeProfile is on the client.
+ *
+ * Next serves that as its blank "This page couldn't load" page with no detail
+ * anywhere in the browser, so a consumer sees a dead route and nothing naming
+ * this component. Every PRD and how-to page on stonedogcode.com was unreachable
+ * this way (NEH-1290).
+ *
+ * Every other component here that calls the hook already declared it — this was
+ * the only one that did not, which is why the failure looked like something
+ * specific to whichever page happened to render a heading on the server.
+ *
+ * `src/components/__tests__/client-directive.test.ts` keeps this honest. It has
+ * to be a source assertion: a jsdom render imports the module directly, so no
+ * RSC boundary exists and every test here passes with or without the directive.
+ */
+
 import React from "react";
 import StyledSeparator from "./StyledSeparator";
 import StyledText from "./StyledText";
