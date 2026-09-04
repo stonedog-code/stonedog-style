@@ -17,6 +17,19 @@ interface StyledSimpleGridProps extends Omit<HTMLStyledProps<"div">, "columns"> 
   columns?: number | { base?: number; sm?: number; md?: number; lg?: number; xl?: number };
   gridTemplateRows?: string;
   gap?: string | number;
+  /**
+   * The minimum size of each `columns`-generated track. Defaults to `"0"`.
+   *
+   * `columns={n}` emits `repeat(n, minmax(<minTrackWidth>, 1fr))`. The default
+   * of `0` lets a track shrink below its content's min-content width, which is
+   * what keeps the grid inside its container.
+   *
+   * Pass `"auto"` to restore the pre-0.21.0 behaviour, in which a track refuses
+   * to shrink below its widest unbreakable child and the whole grid grows past
+   * its container. That is occasionally what you want — a deliberately
+   * horizontally scrolled strip — but it now has to be asked for by name.
+   */
+  minTrackWidth?: string;
 }
 
 const PandaSimpleGrid = styled("div", {
@@ -51,6 +64,7 @@ const StyledSimpleGrid: React.FC<StyledSimpleGridProps> = ({
   columns,
   gridTemplateRows,
   gap,
+  minTrackWidth = "0",
   style,
   children,
   ...rest
@@ -78,9 +92,22 @@ const StyledSimpleGrid: React.FC<StyledSimpleGridProps> = ({
   }, [recalculate]);
 
   // Runtime-computed grid values MUST use inline style — Panda CSS drops them at build time
+  //
+  // `minmax(minTrackWidth, 1fr)`, not a bare `1fr`. In CSS `1fr` IS shorthand
+  // for `minmax(auto, 1fr)`, and that `auto` floor is the grid item's automatic
+  // minimum size — its min-content. So one child that cannot shrink (a long
+  // unbroken string, a `white-space: nowrap` row, a fixed-width control) drags
+  // the track wider than the grid's own container, and every sibling sized
+  // `width: 100%` inherits the overflow. Measured on HopperGuard's dashboard at
+  // 375px: a 1-column grid resolved a 425.875px track inside a 375px container,
+  // and the shell clipped rather than scrolled (NEH-1446, NEH-1447).
+  //
+  // Guarded by grid-track-shrink.ct.tsx, which measures the resolved track in a
+  // real browser. jsdom cannot see this at all — it has no layout engine, so it
+  // reports every box as 0x0 and would agree that a 426px track fits 375px.
   const gridStyles: React.CSSProperties = {
     ...style,
-    gridTemplateColumns: `repeat(${resolvedCols}, 1fr)`,
+    gridTemplateColumns: `repeat(${resolvedCols}, minmax(${minTrackWidth}, 1fr))`,
     gridTemplateRows,
     gap,
   };
