@@ -148,6 +148,7 @@ and nothing visible until someone looks at the pixels.
 |---|---|---|
 | `fontSizeProfile: "md"` | **1rem** (16px) | conventional web scale, as of NEH-251 |
 | `iconSize: "2x"` | 32px | **still HopperGuard's elder size** |
+| `StyledSimpleGrid minTrackWidth: "0"` | `minmax(0, 1fr)` tracks | changed from `auto` in **0.21.0** (NEH-1447) |
 
 **The font scale moved; the icon default has not.** The order that made the
 font change safe is the order any future one has to follow:
@@ -159,6 +160,36 @@ font change safe is the order any future one has to follow:
 
 Done the other way round, the first release silently shrinks a product built
 for an often-elderly, sometimes cognitively-impaired audience.
+
+**`StyledSimpleGrid`'s track default changed in 0.21.0, and the ordering rule
+was satisfied by the version number rather than by a sweep.** `columns={n}` used
+to emit `repeat(n, 1fr)`, and in CSS `1fr` **is** `minmax(auto, 1fr)` — that
+`auto` floor is the item's automatic minimum size, so one child that cannot
+shrink drags the whole track past the grid's container. Measured on HopperGuard
+at 375px: a 425.875px track inside a 375px container, clipped rather than
+scrolled (NEH-1446 fixed it at one call site; NEH-1447 is the cause).
+
+Two things make the change safe to make by default rather than behind an opt-in:
+
+- **A minor bump on a `0.x` package is already opt-in.** Every consumer depends
+  on `^0.20.0` or `^0.15.0`, and a caret range on `0.x` does not cross a minor —
+  so nobody receives this until they widen the range deliberately. A *patch*
+  would have flowed into two apps on their next install and silently re-sized 24
+  grids, which is precisely the failure this section is about.
+- **The old behaviour has a name.** `minTrackWidth="auto"` restores it exactly,
+  so a host that genuinely wants a content-sized track can say so rather than
+  pinning an old version.
+
+**`StyledGrid` was deliberately left alone**, and the reason generalises: it
+passes its `columns` value to Panda as a *style prop*, and Panda extracts styles
+by statically parsing source, so a runtime-computed value yields a class name
+with **no rule behind it**. Measured — `columns={2}` renders
+`class="d_grid grid-tc_repeat(2,_1fr)"` with no matching stylesheet rule and one
+implicit 550.906px content-sized track. Where it appears to work in an app, the
+app's own source happens to contain the same literal somewhere else; HopperGuard
+has `repeat(2, 1fr)` and `repeat(3, 1fr)` in five files, which is exactly why its
+one `StyledGrid columns=` call site renders. Rewriting the emitted string would
+break that coincidence and silently drop the columns.
 
 `iconSize` is still `"2x"` because step 1 has not happened for it: ~150
 HopperGuard call sites rely on that default and the app does not set
