@@ -1,5 +1,6 @@
 import React from "react";
 import StyledSimpleGrid from "./StyledSimpleGrid";
+import StyledGrid from "./StyledGrid";
 
 /**
  * Mount targets for grid-track-shrink.ct.tsx.
@@ -75,6 +76,76 @@ export function SimpleGridProbe({
       >
         {gridChildren(columns)}
       </StyledSimpleGrid>
+    </FixedContainer>
+  );
+}
+
+/**
+ * ---------------------------------------------------------------------------
+ * StyledGrid (NEH-1453)
+ * ---------------------------------------------------------------------------
+ *
+ * **The column counts below are 5, 7 and 11, and that is load-bearing — do not
+ * "tidy" them to 1, 2 and 3.**
+ *
+ * `StyledGrid` used to hand its computed `grid-template-columns` to Panda as a
+ * style prop. Panda extracts styles by statically parsing source, so a runtime
+ * value produced a class *name* with no rule behind it — and where that
+ * appeared to work in an app it was a coincidence: the class name is derived
+ * from the value, so a consumer whose own source happened to contain the same
+ * literal somewhere else got a rule by accident. HopperGuard has exactly that
+ * for `repeat(1, 1fr)` and `repeat(2, 1fr)`.
+ *
+ * A fixture using 1, 2 or 3 columns could therefore pass for the wrong reason
+ * the moment anybody adds such a literal to this package. Nothing in any design
+ * hard-codes a 5-, 7- or 11-column track list, so these cannot collide.
+ *
+ * The counts are also all > 1, which matters independently: the pre-fix
+ * rendering was a SINGLE implicit content-sized track, so any assertion on the
+ * track *count* fails against it.
+ */
+
+export function GridProbe({
+  columns,
+  minTrackWidth,
+}: {
+  columns: number | { base?: number; sm?: number; md?: number; lg?: number; xl?: number };
+  minTrackWidth?: string;
+}) {
+  const count =
+    typeof columns === "number"
+      ? columns
+      : Math.max(...Object.values(columns).filter((n): n is number => typeof n === "number"));
+  return (
+    <FixedContainer>
+      <StyledGrid
+        data-testid="grid"
+        columns={columns}
+        {...(minTrackWidth === undefined ? {} : { minTrackWidth })}
+      >
+        {gridChildren(count)}
+      </StyledGrid>
+    </FixedContainer>
+  );
+}
+
+/**
+ * A literal `templateColumns`, which is NOT a Panda property name and so was
+ * never extracted even when written as a static string at the call site.
+ *
+ * The spec passes the value in rather than the harness owning it: every
+ * constant here would otherwise be imported by the spec, and Playwright CT's
+ * mount transform re-declares any harness import a mount call references,
+ * which collides with the spec-side use ("Identifier ... has already been
+ * declared", raised at collection, reported as "No tests found").
+ */
+export function GridTemplateColumnsProbe({ template }: { template: string }) {
+  return (
+    <FixedContainer>
+      <StyledGrid data-testid="grid" templateColumns={template}>
+        <div>a</div>
+        <div>b</div>
+      </StyledGrid>
     </FixedContainer>
   );
 }

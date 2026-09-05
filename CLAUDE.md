@@ -149,6 +149,7 @@ and nothing visible until someone looks at the pixels.
 | `fontSizeProfile: "md"` | **1rem** (16px) | conventional web scale, as of NEH-251 |
 | `iconSize: "2x"` | 32px | **still HopperGuard's elder size** |
 | `StyledSimpleGrid minTrackWidth: "0"` | `minmax(0, 1fr)` tracks | changed from `auto` in **0.21.0** (NEH-1447) |
+| `StyledGrid minTrackWidth: "0"` | `minmax(0, 1fr)` tracks | new in **0.22.0** (NEH-1453); before it, `columns` emitted no track at all |
 
 **The font scale moved; the icon default has not.** The order that made the
 font change safe is the order any future one has to follow:
@@ -180,16 +181,50 @@ Two things make the change safe to make by default rather than behind an opt-in:
   so a host that genuinely wants a content-sized track can say so rather than
   pinning an old version.
 
-**`StyledGrid` was deliberately left alone**, and the reason generalises: it
-passes its `columns` value to Panda as a *style prop*, and Panda extracts styles
-by statically parsing source, so a runtime-computed value yields a class name
-with **no rule behind it**. Measured — `columns={2}` renders
-`class="d_grid grid-tc_repeat(2,_1fr)"` with no matching stylesheet rule and one
-implicit 550.906px content-sized track. Where it appears to work in an app, the
-app's own source happens to contain the same literal somewhere else; HopperGuard
-has `repeat(2, 1fr)` and `repeat(3, 1fr)` in five files, which is exactly why its
-one `StyledGrid columns=` call site renders. Rewriting the emitted string would
-break that coincidence and silently drop the columns.
+**`StyledGrid` was left alone in 0.21.0 and fixed in 0.22.0 (NEH-1453), and the
+reason it could not be a one-word change is the part worth keeping.** It passed
+its `columns` value to Panda as a *style prop*, and Panda extracts styles by
+statically parsing source, so a runtime-computed value yielded a class name with
+**no rule behind it**. Measured in this package's own component tier —
+`columns={2}` rendered `class="d_grid grid-tc_repeat(2,_1fr)"`, no matching
+stylesheet rule anywhere, and one implicit 550.906px content-sized track. Where
+it appeared to work in an app, the app's own source happened to contain the same
+literal somewhere else. So **rewriting the emitted string was the dangerous
+fix**: a new string appears as a literal nowhere, breaking the coincidence and
+silently dropping the columns.
+
+Two things measured while fixing it correct the older account of the blast
+radius, and both are the same lesson — *check which set the rule came from*:
+
+- **`templateColumns` / `templateRows` / `templateAreas` were never extracted
+  either, literal or not**, because they are not Panda property names. Only
+  `gridTemplateColumns` is, and Panda picks that one up from any JSX element.
+- **HopperGuard's one `columns=` call site was NOT rendering correctly by
+  accident.** `columns={{ base: 1, md: 2, lg: 3 }}` needs
+  `grid-tc_repeat(1,_1fr)`, `md:grid-tc_repeat(2,_1fr)` and
+  `lg:grid-tc_repeat(3,_1fr)`. Its emitted CSS has the first, has **no**
+  `repeat(3` at any breakpoint, and its only `repeat(2,_1fr)` rule is under
+  `lg:`, not `md:`. The coincidence covered the base value only; the grid was
+  one column at every width.
+
+**The fix splits the rule from the value.** The `grid-template-*` rules are
+string literals in `StyledGrid.tsx` — one per breakpoint, each reading a CSS
+custom property — so Panda genuinely extracts them, with real `@media`
+conditions. The values ride in on inline custom properties, which are never
+extracted and always applied. That buys what neither obvious option does:
+correct on the server, no resize listener (`StyledSimpleGrid` pays for its
+responsive form with one), and no upper bound on the column count the way a
+`staticCss` enumeration would have.
+
+Once the value stops travelling through Panda, `repeat(n, minmax(0, 1fr))`
+becomes safe for `StyledGrid` too — which is why 0.22.0 makes that change and
+0.21.0 could not. `minTrackWidth` is the same escape hatch, spelled the same
+way.
+
+**The narrowing to know about:** responsive objects now carry `base` and the six
+preset breakpoints only. Any other Panda condition (`_hover`, the array syntax)
+is dropped — as it silently was before — but now with a `log.warn`. Use
+`className={css({ ... })}` for those, which Panda extracts from the call site.
 
 `iconSize` is still `"2x"` because step 1 has not happened for it: ~150
 HopperGuard call sites rely on that default and the app does not set
