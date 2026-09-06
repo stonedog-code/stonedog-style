@@ -27,10 +27,17 @@ import { StonedogStyleProvider } from "../config/style-config";
 test.describe("vertical spacing on StyledText", () => {
   test("a vertical margin actually separates two paragraphs", async ({ mount }) => {
     const component = await mount(
-      // A BARE div, deliberately. StyledBox lays its children out in a flex
-      // column, which blockifies them — so this test would pass with or
-      // without the fix and prove nothing. The defect only appears in ordinary
-      // inline flow, so that is what has to be under it.
+      // A BARE div, deliberately: the defect only appears in ordinary inline
+      // flow, so that is what has to be under it.
+      //
+      // This comment used to justify the bare div by saying "StyledBox lays its
+      // children out in a flex column, which blockifies them". That was FALSE
+      // and is worth correcting rather than deleting, because believing it is
+      // what let the same symptom ship a third time (NEH-1473). Without
+      // `noWrap`, StyledBox put children four levels down inside a plain block
+      // div, so a caller's flex props never reached them — see
+      // StyledBox.ct.tsx. Fixed now, but the bare div is still the right
+      // control here: it is the case with no layout at all.
       <div>
         <StyledText marginBottom="4" data-testid="first">
           No dates to show yet

@@ -150,6 +150,7 @@ and nothing visible until someone looks at the pixels.
 | `iconSize: "2x"` | 32px | **still HopperGuard's elder size** |
 | `StyledSimpleGrid minTrackWidth: "0"` | `minmax(0, 1fr)` tracks | changed from `auto` in **0.21.0** (NEH-1447) |
 | `StyledGrid minTrackWidth: "0"` | `minmax(0, 1fr)` tracks | new in **0.22.0** (NEH-1453); before it, `columns` emitted no track at all |
+| `StyledBox` layout props reach the children | the root parents them directly | new in **0.23.0** (NEH-1475); before it, `display`/`flexDirection`/`alignItems`/`gap` on a `StyledBox` were **inert** |
 
 **The font scale moved; the icon default has not.** The order that made the
 font change safe is the order any future one has to follow:
@@ -795,6 +796,57 @@ passed against the original defect just as happily; `StyledText.ct.tsx`
 measures two bounding boxes in a real browser. That test was verified by
 disabling the promotion and watching 4 of 12 fail — a layout guard nobody has
 seen fail is not yet a guard.
+
+## A wrapper between a prop and the element it describes (NEH-1475)
+
+The section above says a component must not accept a prop it cannot honour.
+`StyledBox` accepted fifteen it could not, and the reason is worth keeping
+because nothing about it is visible from a call site.
+
+Without `noWrap` it put children **four levels down**:
+
+```
+StyledBoxRoot        ← display / flexDirection / alignItems / gap landed HERE
+  └ StyledVStack     ← ...whose only child is this
+      └ div
+          └ StyledGridPanel
+              └ div  ← a plain BLOCK div, where the caller's children live
+```
+
+So `<StyledBox display="flex" flexDirection="column">` built a flex container
+around exactly **one** item. The caller's children stayed in ordinary block
+flow, `alignItems` centred a wrapper, and `gap` separated nothing — silently,
+with the class in the DOM and `getComputedStyle` reporting every value.
+
+**The visible cost was NEH-490's symptom, for the third time.** Two adjacent
+`StyledText` siblings weld into one run — a `<span>` is inline and JSX strips
+the whitespace between elements on separate lines — so HopperGuard's Vitals card
+shipped `264.2Weight` and `Sep 6Record another to see a trend.` (NEH-1473).
+NEH-490 fixed the previous two **at the call site**, which is exactly why it came
+back.
+
+**How it stayed invisible for so long: the neighbouring test asserted the
+opposite.** `StyledText.ct.tsx` used a bare `<div>` and explained why in a
+comment — *"StyledBox lays its children out in a flex column, which blockifies
+them"*. That belief was false, and being written down as the reason for a test's
+shape is what made it authoritative. Corrected in the same change.
+
+**The fix: when the caller lays out their own children and nothing else needs
+the wrapper, the root parents them directly.** Gated on no header, no footer, no
+panels and no `scrollbar` — each is a real reason the wrapper exists.
+
+**Forwarding the props as inline CSS was tried first and is wrong.** `gap="2"`
+is a Panda spacing TOKEN, not a length, so `style={{ gap: "2" }}` is invalid CSS
+and dropped. Panda resolves tokens at build time for props on a styled
+component; it cannot for a runtime value written into a style attribute. Making
+the root the real parent leaves every prop where Panda already handles it.
+
+**This cannot break anything that worked** — a flex container with one child
+arranges nothing, so nothing could depend on the effect. Same argument
+`StyledText`'s block promotion makes. Verified by disabling the fix and watching
+**12 of 16 fail**; the 4 that pass are the control, which asserts a `StyledBox`
+with no layout props keeps ordinary block flow. The whole component tier —
+**1104 tests across four viewports** — passes with the change.
 
 ## Accessibility is a floor, not a feature
 

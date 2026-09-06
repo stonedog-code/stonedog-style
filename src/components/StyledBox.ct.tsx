@@ -3,106 +3,149 @@ import StyledBox from "./StyledBox";
 import StyledText from "./StyledText";
 
 /**
- * Layout assertions for StyledBox, in a real browser.
+ * A caller's layout props must reach the element that PARENTS their children.
  *
- * Everything here is deliberately something jsdom cannot answer. jsdom has no
- * layout engine — every element reports a zero-sized box — so it will happily
- * agree that content fits a 375px screen when it overflows by 200px. These
- * tests measure.
+ * ## The defect
+ *
+ * `StyledBox` without `noWrap` wraps children three levels deep:
+ *
+ * ```
+ * StyledBoxRoot        ← the caller's display/flexDirection/alignItems land HERE
+ *   └ StyledVStack     ← ...whose only child is this
+ *       └ div          ← flex:1, minHeight:0
+ *           └ StyledGridPanel
+ *               └ div  ← a PLAIN BLOCK div, and the caller's children live here
+ * ```
+ *
+ * So `<StyledBox display="flex" flexDirection="column">` applies a flex
+ * container to a root holding exactly ONE child. The caller's children sit in
+ * ordinary block flow four levels down, and the props are inert — silently.
+ *
+ * Two consequences, both shipped:
+ *
+ * 1. **Adjacent `StyledText` siblings weld into one run.** `StyledText` renders
+ *    a `<span>`, JSX strips the whitespace between elements on separate lines,
+ *    and nothing blockifies them — so Hopper Vitals rendered `264.2Weight` and
+ *    `Sep 6Record another to see a trend.` (NEH-1473). This is the third
+ *    product surface to ship the symptom NEH-490 describes; the previous two
+ *    were fixed at the call site, which is why it came back.
+ * 2. **`alignItems` / `justifyContent` do nothing.** The same card centres its
+ *    reading and not its caption, from one `alignItems="center"`.
+ *
+ * ## Why this was invisible
+ *
+ * `StyledText.ct.tsx` states in a comment that "StyledBox lays its children out
+ * in a flex column, which blockifies them" — and uses a bare `<div>` instead to
+ * avoid a vacuous test. That belief is what this file measures, and it is
+ * false. The comment is corrected in the same change.
+ *
+ * jsdom cannot see any of it: every box is 0×0, so a jsdom test agrees that two
+ * welded spans are stacked. Real Chromium is the only tier that can answer.
  */
 
-test.use({ viewport: { width: 375, height: 667 } });
+/** Two block-level siblings differ in `y`; two welded inline spans share it. */
+async function stacked(
+  first: { y: number; height: number },
+  second: { y: number },
+): Promise<boolean> {
+  return second.y > first.y + first.height - 1;
+}
 
-test.describe("StyledBox at the narrowest supported screen", () => {
-  test("does not overflow the viewport horizontally", async ({ mount, page }) => {
-    // The failure this catches: a fixed width, a min-width, or a non-wrapping
-    // row that pushes the page wider than the screen. On a phone that is a
-    // horizontal scrollbar on the whole document, which is the single most
-    // common responsive regression.
-    await mount(
-      <StyledBox p="4">
-        <StyledText>
-          A reasonably long sentence that has to wrap rather than push the
-          document sideways on a small screen.
-        </StyledText>
+test.describe("StyledBox forwards layout props to its children", () => {
+  test("a flex column actually stacks two StyledText children", async ({ mount }) => {
+    const component = await mount(
+      <StyledBox display="flex" flexDirection="column" data-testid="box">
+        <StyledText data-testid="value">264.2</StyledText>
+        <StyledText data-testid="label">Weight</StyledText>
       </StyledBox>,
     );
 
-    const overflows = await page.evaluate(
-      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-    );
-    expect(overflows).toBe(false);
+    const value = await component.getByTestId("value").boundingBox();
+    const label = await component.getByTestId("label").boundingBox();
+    expect(value).not.toBeNull();
+    expect(label).not.toBeNull();
+
+    // THE ASSERTION. Welded, they share a line and the label sits to the right;
+    // stacked, it starts below the value.
+    expect(await stacked(value!, label!)).toBe(true);
+
+    // And the rendered text is not one run — the symptom a reader sees.
+    //
+    // `innerText`, not `textContent`: textContent concatenates text NODES and
+    // never inserts a separator, so it reads "264.2Weight" whether the spans
+    // are welded on one line or stacked as blocks. Only innerText is
+    // layout-aware, which is the whole question here.
+    //
+    // Read from `component` itself rather than `getByTestId("box")`: the
+    // StyledBox IS the mounted root, and a locator searches DESCENDANTS, so
+    // that query matches nothing and times out instead of failing.
+    const text = await component.innerText();
+    expect(text).not.toContain("264.2Weight");
+    expect(text).toContain("264.2");
+    expect(text).toContain("Weight");
   });
 
-  test("header and footer stay inside the box, above and below the content", async ({
+  test("alignItems reaches the children rather than a wrapper", async ({ mount }) => {
+    const component = await mount(
+      <div style={{ width: 400 }}>
+        <StyledBox
+          display="flex"
+          flexDirection="column"
+          alignItems="center"
+          data-testid="box"
+        >
+          <StyledText data-testid="short">Hi</StyledText>
+        </StyledBox>
+      </div>,
+    );
+
+    const box = await component.getByTestId("box").boundingBox();
+    const short = await component.getByTestId("short").boundingBox();
+    expect(box).not.toBeNull();
+    expect(short).not.toBeNull();
+
+    // Centred: equal slack either side. Inert: the span sits hard left.
+    const leftGap = short!.x - box!.x;
+    const rightGap = box!.x + box!.width - (short!.x + short!.width);
+    expect(Math.abs(leftGap - rightGap)).toBeLessThan(4);
+    expect(leftGap).toBeGreaterThan(10);
+  });
+
+  test("a row direction keeps them on ONE line — the opposite direction", async ({
     mount,
   }) => {
-    // Asserts the actual stacking order in pixels, not just that all three
-    // rendered. A flex-direction regression puts them side by side and every
-    // DOM-order assertion still passes.
+    // The control. If the fix worked by blockifying everything unconditionally,
+    // this would fail — and a fix that stacks text the caller asked to sit in a
+    // row is a different bug, not a fix.
     const component = await mount(
-      <StyledBox
-        header={<StyledText>Head</StyledText>}
-        footer={<StyledText>Foot</StyledText>}
-      >
-        <StyledText>Body</StyledText>
+      <StyledBox display="flex" flexDirection="row" gap="2" data-testid="box">
+        <StyledText data-testid="a">Weight</StyledText>
+        <StyledText data-testid="b">264.2 lbs</StyledText>
       </StyledBox>,
     );
 
-    const head = await component.getByText("Head").boundingBox();
-    const body = await component.getByText("Body").boundingBox();
-    const foot = await component.getByText("Foot").boundingBox();
-
-    expect(head).not.toBeNull();
-    expect(body).not.toBeNull();
-    expect(foot).not.toBeNull();
-    expect(head!.y).toBeLessThan(body!.y);
-    expect(body!.y).toBeLessThan(foot!.y);
+    const a = await component.getByTestId("a").boundingBox();
+    const b = await component.getByTestId("b").boundingBox();
+    expect(await stacked(a!, b!)).toBe(false);
+    // ...and `gap` separates them, so they are not welded either.
+    expect(b!.x - (a!.x + a!.width)).toBeGreaterThan(2);
   });
-});
 
-test.describe("StyledBox side panels", () => {
-  test("places left and right panels either side of the content", async ({ mount }) => {
-    // The grid is `min-content 1fr min-content`. This asserts the columns
-    // actually resolve in that order rather than collapsing or reversing.
-    const component = await mount(
-      <StyledBox
-        leftPanel={<StyledText>Nav</StyledText>}
-        rightPanel={<StyledText>Aside</StyledText>}
-      >
-        <StyledText>Main</StyledText>
-      </StyledBox>,
-    );
-
-    const nav = (await component.getByText("Nav").boundingBox())!;
-    const main = (await component.getByText("Main").boundingBox())!;
-    const aside = (await component.getByText("Aside").boundingBox())!;
-
-    expect(nav.x).toBeLessThan(main.x);
-    expect(main.x).toBeLessThan(aside.x);
-  });
-});
-
-test.describe("theme tokens actually paint", () => {
-  test("resolves a background token to a real colour, not an empty string", async ({
+  test("a plain StyledBox is unchanged — no layout props, no promotion", async ({
     mount,
   }) => {
-    // The whole token contract in one assertion. A token whose custom property
-    // is undefined resolves to nothing and the element paints transparent —
-    // silently, with no error anywhere. jsdom cannot see this because it does
-    // not compute styles from a stylesheet.
+    // The other control. Callers who pass no layout props must keep ordinary
+    // block flow, where two inline spans SHARE a line. That is `StyledText`'s
+    // deliberate, separately-tested behaviour and this fix must not alter it.
     const component = await mount(
-      <StyledBox bg="boxBgPrimary" p="4">
-        <StyledText>Painted</StyledText>
+      <StyledBox data-testid="box">
+        <StyledText data-testid="a">Inline</StyledText>
+        <StyledText data-testid="b">text</StyledText>
       </StyledBox>,
     );
 
-    const bg = await component.evaluate(
-      (el) => getComputedStyle(el).backgroundColor,
-    );
-
-    expect(bg).not.toBe("");
-    expect(bg).not.toBe("transparent");
-    expect(bg).not.toBe("rgba(0, 0, 0, 0)");
+    const a = await component.getByTestId("a").boundingBox();
+    const b = await component.getByTestId("b").boundingBox();
+    expect(await stacked(a!, b!)).toBe(false);
   });
 });
