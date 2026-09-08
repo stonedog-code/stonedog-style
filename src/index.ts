@@ -327,6 +327,17 @@ export { default as StyledSparkLine } from "./components/StyledSparkLine";
 export type { StyledSparkLineProps } from "./components/StyledSparkLine";
 
 /**
+ * `StyledChart` — a plot, the same numbers as a table, a range control and
+ * fullscreen (NEH-1521).
+ *
+ * The table is ALWAYS rendered beneath the plot; there is no toggle. The plot
+ * itself is a seam (`renderPlot`), so this package still adds no charting
+ * library — the host renders the mark with whatever it already ships and keeps
+ * that bundle cost behind its own lazy import.
+ */
+export * from "./components/chart";
+
+/**
  * A data table that renders real `<table>` markup rather than a div grid — the
  * table role is what carries row and column position to a screen reader.
  */
