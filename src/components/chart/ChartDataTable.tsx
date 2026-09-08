@@ -123,13 +123,23 @@ export const ChartDataTable: React.FC<ChartDataTableProps> = ({
         data-testid={testId}
         style={{
           /*
-           * `separate`, not `collapse`, and `border-spacing: 0` to keep the
-           * appearance identical.
+           * `separate`, not `collapse`, and `border-spacing: 0` so the
+           * appearance is identical (each cell draws its own bottom rule, so
+           * nothing doubles).
            *
-           * `position: sticky` on a `<th>` does not work inside a
-           * `border-collapse: collapse` table in Chromium — the header scrolls
-           * away with the body, silently. A reader 200 rows into a year of
-           * readings would have had no idea which column was which.
+           * `position: sticky` on a `<th>` inside a `border-collapse:
+           * collapse` table was broken for years, and still is in older
+           * engines. It is NOT broken in the Chromium the component tier
+           * runs: planting `collapse` back leaves all 12 specs green. So this
+           * is defensive rather than guarded, and the tier that would catch a
+           * regression — an older Chromium, or WebKit — is a tier this
+           * package does not run. Said plainly rather than left as an
+           * implication that the test covers it.
+           *
+           * The first version of this comment claimed the sticky test caught
+           * `collapse` failing. It did not: that test was comparing the
+           * header against its UNSCROLLED position, and the 32px it reported
+           * was the caption leaving, not the header moving.
            */
           borderCollapse: "separate",
           borderSpacing: 0,
