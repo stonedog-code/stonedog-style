@@ -90,9 +90,28 @@ export const ChartDataTable: React.FC<ChartDataTableProps> = ({
       data-testid={`${testId}-scroll`}
       data-scrolls={scrolls ? "true" : "false"}
       style={{
-        // BOTH axes inside this box. The page body must never scroll
-        // sideways because a table got wide.
+        // BOTH axes inside this box. The page must never scroll sideways
+        // because a table got wide — `StyledChart.ct.tsx` asks the browser to
+        // scroll and reads `window.scrollX` back, at four viewports.
         overflow: "auto",
+        /*
+         * Belt and braces for a scroll container that is a flex descendant: a
+         * flex item's `min-width` defaults to `auto`, which resolves to
+         * min-content — for a table, the width of its narrowest layout — so
+         * such an item refuses to be narrower than its own table and
+         * `overflow: auto` never engages.
+         *
+         * Stated honestly: removing these three declarations fails NO test
+         * today. The sideways scroll that was measured here came from
+         * somewhere else entirely (the visually-hidden gap labels; see
+         * `sr-only.ts`), and a first, confident reading of the symptom
+         * attributed it to this. They are kept because they are correct for
+         * the layout this component will be dropped into, not because
+         * anything proves they are load-bearing.
+         */
+        minWidth: 0,
+        maxWidth: "100%",
+        width: "100%",
         maxHeight: scrolls ? maxHeight : undefined,
         borderWidth: 1,
         borderStyle: "solid",
@@ -103,7 +122,17 @@ export const ChartDataTable: React.FC<ChartDataTableProps> = ({
       <table
         data-testid={testId}
         style={{
-          borderCollapse: "collapse",
+          /*
+           * `separate`, not `collapse`, and `border-spacing: 0` to keep the
+           * appearance identical.
+           *
+           * `position: sticky` on a `<th>` does not work inside a
+           * `border-collapse: collapse` table in Chromium — the header scrolls
+           * away with the body, silently. A reader 200 rows into a year of
+           * readings would have had no idea which column was which.
+           */
+          borderCollapse: "separate",
+          borderSpacing: 0,
           width: "100%",
           // Digits share a column width, so numeric cells line up down the
           // table. The single most useful thing a table of readings can do.
