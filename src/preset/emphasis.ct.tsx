@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
-import { EmphasisHarness } from "./emphasis.harness";
+import { EmphasisHarness, EmphasisOnTintedChip } from "./emphasis.harness";
 
 /**
  * The emphasis tiers, measured in a browser (NEH-519).
@@ -121,10 +121,182 @@ test.describe("the emphasis tiers", () => {
           await component.getByTestId(id).evaluate((el) => getComputedStyle(el).color),
           bg,
         );
-        expect(contrast(fg, bg), `${id} on ${surface}`).toBeGreaterThanOrEqual(4.5);
+        const ratio = contrast(fg, bg);
+        // Attached as well as asserted (NEH-974). A margin that erodes without
+        // crossing 4.5 is invisible in a pass/fail, and these two percentages
+        // are exactly the kind of value that gets nudged.
+        await test.info().attach(`contrast — ${id} on ${surface}`, {
+          body: `ratio ${ratio.toFixed(2)}:1  (fg ${fg.map(Math.round).join(", ")} on bg ${bg.map(Math.round).join(", ")})`,
+          contentType: "text/plain",
+        });
+        expect(ratio, `${id} on ${surface}`).toBeGreaterThanOrEqual(4.5);
       }
     });
   }
+
+  /**
+   * The third surface — a translucent chip over an opaque themed card
+   * (NEH-974).
+   *
+   * ## What this issue's premise got wrong, and what it got right
+   *
+   * NEH-974 says `textSubtle` at 64% "is measured nowhere". **It is measured
+   * here, and has been since this file landed on 2026-08-12** — the two
+   * assertions above run over BOTH tiers on `boxBgMain` and `boxBgPrimary`,
+   * in Chromium, compositing the `color-mix` alpha onto the surface. The
+   * comment in `semantic-variables.ts` that the issue quotes was written a
+   * week later and asserted the opposite of the file sitting next to it; that
+   * comment is corrected in the same change as this test.
+   *
+   * What the issue is RIGHT about is the third surface. The two above read the
+   * background off ONE element, which is only sound because both harness
+   * surfaces are opaque. A translucent chip's own `background-color` says
+   * nothing about what shows through it, and this is the case that produced a
+   * confidently wrong pass elsewhere in this fleet — a checker read the page
+   * while the text sat on a tinted chip over a dark card, and reported a ratio
+   * describing a rendering nobody ever saw.
+   *
+   * So the surface here is **composited** rather than read: walk `<html>` down
+   * to the text in paint order, paint each ancestor's `background-color` over
+   * a 1x1 canvas starting from the UA white, then paint the text's own colour
+   * over the result. The alpha maths is the browser's, and the numbers come out
+   * of a real painted pixel. Same technique as
+   * `components/StyledFieldHelp.contrast.ct.tsx`, which does this for
+   * `textMuted` alone; it is repeated inline rather than imported because
+   * Playwright serialises the function into the page, where this module's scope
+   * does not exist.
+   */
+  function measureComposited(el: Element): {
+    ratio: number;
+    text: string;
+    surface: string;
+    ratioAgainstPage: number;
+    page: string;
+  } {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("no 2d context — the measurement cannot be trusted");
+
+    const paint = (colour: string): [number, number, number] => {
+      // A colour the canvas refuses leaves `fillStyle` at its previous value,
+      // which would silently measure the wrong thing. Detect it instead.
+      const sentinel = "#010203";
+      ctx.fillStyle = sentinel;
+      ctx.fillStyle = colour;
+      if (ctx.fillStyle === sentinel && colour.replace(/\s/g, "") !== sentinel) {
+        throw new Error(`the browser could not parse the colour "${colour}"`);
+      }
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+      return [r ?? 0, g ?? 0, b ?? 0];
+    };
+    const reset = (rgb: [number, number, number]) => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+      ctx.fillRect(0, 0, 1, 1);
+    };
+
+    const chain: Element[] = [];
+    for (let node: Element | null = el; node; node = node.parentElement) {
+      chain.push(node);
+    }
+    chain.reverse();
+
+    reset([255, 255, 255]);
+    for (const node of chain) paint(getComputedStyle(node).backgroundColor);
+    const s = ctx.getImageData(0, 0, 1, 1).data;
+    const surfaceRgb: [number, number, number] = [s[0] ?? 0, s[1] ?? 0, s[2] ?? 0];
+    const textRgb = paint(getComputedStyle(el).color);
+
+    // The same text over the PAGE background — the wrong measurement, computed
+    // on purpose so the test can prove the right one differs from it.
+    reset([255, 255, 255]);
+    for (const node of [document.documentElement, document.body]) {
+      if (node) paint(getComputedStyle(node).backgroundColor);
+    }
+    const p = ctx.getImageData(0, 0, 1, 1).data;
+    const pageRgb: [number, number, number] = [p[0] ?? 0, p[1] ?? 0, p[2] ?? 0];
+    const textOverPage = paint(getComputedStyle(el).color);
+
+    const lum = ([r, g, b]: [number, number, number]) => {
+      const ch = (v: number) => {
+        const c = v / 255;
+        return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      };
+      return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b);
+    };
+    const ratioOf = (
+      a: [number, number, number],
+      b: [number, number, number],
+    ) => {
+      const [light, dark] = [lum(a), lum(b)].sort((x, y) => y - x);
+      return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
+    };
+    const show = (rgb: [number, number, number]) =>
+      `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+
+    return {
+      ratio: ratioOf(textRgb, surfaceRgb),
+      text: show(textRgb),
+      surface: show(surfaceRgb),
+      ratioAgainstPage: ratioOf(textOverPage, pageRgb),
+      page: show(pageRgb),
+    };
+  }
+
+  test("both tiers clear WCAG AA on a translucent chip over a card", async ({
+    mount,
+  }) => {
+    const component = await mount(<EmphasisOnTintedChip />);
+
+    for (const id of ["muted", "subtle"]) {
+      const result = await component.getByTestId(id).evaluate(measureComposited);
+      // Attached as well as asserted, so an eroding margin is visible in the
+      // diff of a run rather than only at the moment it finally fails.
+      await test.info().attach(`contrast — ${id} on a tinted chip over a card`, {
+        body: [
+          `text     ${result.text}`,
+          `surface  ${result.surface}   (composited from the ancestor chain)`,
+          `ratio    ${result.ratio.toFixed(2)}:1`,
+          ``,
+          `page bg  ${result.page}`,
+          `ratio if measured against the page instead: ${result.ratioAgainstPage.toFixed(2)}:1`,
+        ].join("\n"),
+        contentType: "text/plain",
+      });
+      expect(result.ratio, `${id} on a tinted chip over a card`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  test("the composited surface is not the page background — the walk is doing work", async ({
+    mount,
+  }) => {
+    // The non-vacuity check for the test above. If the walk silently fell back
+    // to reading the page, it would still pass while measuring a rendering
+    // nobody sees. These two answers must disagree.
+    const component = await mount(<EmphasisOnTintedChip />);
+    const result = await component.getByTestId("subtle").evaluate(measureComposited);
+
+    expect(result.surface).not.toBe(result.page);
+  });
+
+  test("the tiers are translucent, so compositing is required rather than optional", async ({
+    mount,
+  }) => {
+    // Pin the premise the whole measurement rests on. If `textSubtle` ever
+    // became an opaque colour, everything above would still be correct but its
+    // central difficulty would be gone, and a later reader would reasonably
+    // wonder why it is written this way.
+    const component = await mount(<EmphasisOnTintedChip />);
+    for (const id of ["muted", "subtle"]) {
+      const colour = await component
+        .getByTestId(id)
+        .evaluate((el) => getComputedStyle(el).color);
+      expect(colour, id).toMatch(/rgba|color\(|\/\s*0?\.\d+/);
+    }
+  });
 
   test("follow the inherited colour rather than a fixed one", async ({ mount, page }) => {
     // THE claim the relative default rests on. If these ever resolved to a
