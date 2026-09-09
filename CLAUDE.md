@@ -690,6 +690,39 @@ be decoration with no effect.
 one arriving: it asserts every emitted `background-image` is a production CSS
 accepts, rather than banning the one spelling that has already bitten us.
 
+### A FOREGROUND token used as a surface (NEH-1264)
+
+The nastiest member of this family so far, because both of the guards written
+to catch this class pass over it and one of them does so *because of its own
+correctness rule*.
+
+`stackRecipe`'s `solid` shipped `bg: "textPrimary"` alongside
+`color: "textPrimary"` — surface and text the same colour, so **1:1 in every
+theme this package can wear**. Not low contrast: invisible. `textRecipe`'s
+`warning` and `error` did the milder version, painting `textPop` (the loud
+*text* colour) as a chip.
+
+| sweep in `variant-contrast-pairing.test.ts` | asks | why it passed |
+| -- | -- | -- |
+| NEH-441 | does a variant that paints a background state a text colour? | it did |
+| NEH-877 | is that colour the contract's partner for the surface? | it fires only when the background is a token the contract names a partner FOR — a foreground is not, so the lookup missed and the variant was **skipped entirely** |
+
+The second is the lesson. That sweep is deliberately scoped to declared
+pairings so it enforces the contract rather than inventing rules, and that
+scoping is right — it is also precisely what let a foreground-as-surface
+through. The answer is not to widen it. It is a separate, narrower assertion
+that invents nothing, because the contract already says which tokens are
+foregrounds: `src/preset/__tests__/surface-is-not-a-text-token.test.ts`.
+
+**It is scoped to rules that render text, by construction rather than by an
+allowlist.** Three places paint a foreground token deliberately and correctly
+— `input-radio__indicator` (a 12px dot), `StyledInputToggle`'s knob
+(`buttonTextAccent`, which is exactly the colour that reads against the
+`buttonBgAccent` track), and `StyledConfetti`. None of them render text, so
+requiring a `color` declaration excludes all three without a list. An
+allowlist here would be the `KNOWN_DEAD` shape NEH-301 deleted, and the next
+offender would be added to it rather than fixed.
+
 ### A `var()` value is unassertable in jsdom (NEH-406)
 
 `toHaveStyle({ fontSize: "var(--font-sizes-xl, 1.25rem)" })` **cannot fail.**

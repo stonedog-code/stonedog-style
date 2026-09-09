@@ -40,7 +40,29 @@ export const stackRecipe = defineRecipe({
     },
     variant: {
         solid: {
-            bg: "textPrimary",
+            /**
+             * `boxBgPrimary`, not `textPrimary` (NEH-1264).
+             *
+             * This variant painted its surface AND its text with the SAME
+             * token — `textPrimary` on `textPrimary`, which is 1:1 in every
+             * theme this package can wear. Invisible text, not merely
+             * low-contrast text.
+             *
+             * It survived two sweeps written to catch exactly this family.
+             * NEH-441 asks whether a variant that paints a background states a
+             * colour: it does. NEH-877 asks whether the stated colour is the
+             * contract's partner for the surface — but it only fires when the
+             * surface is a token the contract names a partner FOR, and
+             * `textPrimary` is a foreground, so the lookup missed and the
+             * variant was skipped. Neither could see a foreground token used
+             * as a surface, which is why this change ships with a guard for
+             * that shape rather than only a fix.
+             *
+             * `boxBgPrimary` is the contract's own partner for the
+             * `textPrimary` already stated here, and it is what `matte` and
+             * `ghost` below do with `boxBgSecondary`/`textSecondary`.
+             */
+            bg: "boxBgPrimary",
             color: "textPrimary",
             borderColor: "borderBgPrimary",
         },
@@ -48,7 +70,11 @@ export const stackRecipe = defineRecipe({
             borderColor: "borderBgSecondary",
             color: "textPrimary",
             _hover: {
-            bg: "textPrimary",
+            // Same defect, same fix (NEH-1264). `outline` states
+            // `color: textPrimary`, so hovering used to paint the surface the
+            // identical colour as the text — the label vanished under the
+            // pointer, which is the one moment a reader is looking at it.
+            bg: "boxBgPrimary",
             },
         },
         aurora: {
