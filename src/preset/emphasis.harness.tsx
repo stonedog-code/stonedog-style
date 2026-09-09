@@ -31,4 +31,47 @@ export function EmphasisHarness({ surface = "boxBgMain", base = "textMain" }) {
   );
 }
 
+/**
+ * An opaque themed panel with a **translucent** chip inside it (NEH-974).
+ *
+ * The third surface, and the only one whose background cannot be read off a
+ * single element: the chip paints 40% of a token over something the chip knows
+ * nothing about. Measuring the tiers here needs the whole ancestor chain
+ * composited, which is what `emphasis.ct.tsx` does with a canvas.
+ *
+ * `color-mix` with `transparent` rather than a flat colour, because that is how
+ * this package's own status surfaces are defined — the shape is real, not
+ * contrived. Same fixture shape as `StyledFieldHelp.harness.tsx`, which does
+ * the same thing for `textMuted` alone.
+ */
+export function EmphasisOnTintedChip() {
+  return (
+    <div
+      data-testid="surface"
+      className={css({ padding: "4" })}
+      style={{
+        background: "var(--colors-box-bg-primary)",
+        color: "var(--colors-text-primary)",
+      }}
+    >
+      <div
+        data-testid="chip"
+        className={css({ padding: "3" })}
+        style={{
+          background:
+            "color-mix(in srgb, var(--colors-box-bg-secondary) 40%, transparent)",
+        }}
+      >
+        <span data-testid="normal">Normal</span>{" "}
+        <span data-testid="muted" className={css({ color: "textMuted" })}>
+          Muted
+        </span>{" "}
+        <span data-testid="subtle" className={css({ color: "textSubtle" })}>
+          Subtle
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default EmphasisHarness;
