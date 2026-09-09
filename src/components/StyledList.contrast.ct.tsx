@@ -19,9 +19,68 @@ import { ListHarness } from "./StyledList.harness";
  * so inheriting is correct there and pinning a colour would be the bug.
  */
 
-const PAINTED_VARIANTS = ["solid", "matte"] as const;
+const PAINTED_VARIANTS = ["solid"] as const;
+
+/**
+ * **`matte` moved out of the painted set on purpose (NEH-1266) — read this
+ * before moving it back.**
+ *
+ * It used to be here, and it passed, because it stated `color: "white"`. The
+ * comment justifying that literal said the variant sat on "a FIXED dark
+ * gradient". It never did: `bgGradient: "linear(to-b, gray.800, gray.900)"` is
+ * Chakra v2 syntax, Panda emitted it verbatim as
+ * `background-image: linear(to-b, …)`, `linear()` is a CSS *easing* function
+ * rather than an `<image>`, and every engine discarded the declaration at
+ * parse time.
+ *
+ * So `matte` painted NO surface and pinned its rows to white over whatever was
+ * behind them — white-on-near-white on any light page. This test asserted the
+ * white was there, which is the shape this repo already warns about: a passing
+ * test can pin a defect in place, because review cannot remove the defect
+ * without going red.
+ *
+ * Both are gone now. `matte` owns no surface, so inheriting is correct by
+ * construction — the colour it inherits is the one its host already pairs with
+ * the surface underneath, exactly the argument `outline` and `none` are absent
+ * under. The assertion below is the positive form of that, so the fact is
+ * still covered rather than merely dropped.
+ *
+ * Giving `matte` a real token surface instead — `boxBgAccent` with `textAccent`
+ * is the one `box`-family contract pair no other list variant uses — is a
+ * defensible alternative and a visible design change. If that ever lands, this
+ * block fails and asks for the variant to be moved back up.
+ */
+const UNPAINTED_VARIANTS = ["matte"] as const;
 
 test.describe("StyledList — text is paired with its surface", () => {
+  for (const variant of UNPAINTED_VARIANTS) {
+    test(`${variant} paints no surface, so it inherits rather than pinning a colour`, async ({
+      mount,
+    }) => {
+      const component = await mount(<ListHarness variant={variant} />);
+
+      const { color, background, image } = await component
+        .locator("li")
+        .first()
+        .evaluate((el) => {
+          const root = el.parentElement!;
+          const rootStyle = getComputedStyle(root);
+          return {
+            color: getComputedStyle(el).color,
+            background: rootStyle.backgroundColor,
+            image: rootStyle.backgroundImage,
+          };
+        });
+
+      // Nothing is painted — not a colour, and not the dead gradient either.
+      expect(background).toBe("rgba(0, 0, 0, 0)");
+      expect(image).toBe("none");
+      // And the row takes the harness page's own black, which is the whole
+      // point: on an unpainted surface the host's pairing is the right one.
+      expect(color).toBe("rgb(0, 0, 0)");
+    });
+  }
+
   for (const variant of PAINTED_VARIANTS) {
     test(`${variant} states a text colour rather than inheriting`, async ({
       mount,

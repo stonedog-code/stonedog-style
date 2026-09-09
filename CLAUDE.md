@@ -652,15 +652,43 @@ Two things follow, and the first one cost a wrong diagnosis (NEH-881):
   pairing in place under a comment calling it deliberate.
 - **Where a `matte` variant also sets `bg`, the real surface is that `bg`.**
   `button` and `icon-button` did, so both were plain accent-surface
-  mispairings and are fixed (NEH-881). `box` and `input-bool` set **no**
-  background at all once the dead declaration is discounted, so their
-  `color: "white"` now paints on whatever is behind them — a genuine
-  legibility hazard on a light page, and the opposite of what the comment
-  above it claims. That is untouched here and tracked separately.
+  mispairings and are fixed (NEH-881). `box`, `input-bool` and `list` set
+  **no** background at all once the dead declaration is discounted, so their
+  `color: "white"` painted on whatever was behind them — a genuine legibility
+  hazard on a light page, and the opposite of what their comments claimed.
 
-The remaining eight dead declarations are left in place deliberately: removing
-one changes what the pairing guard can see, so each wants its own look rather
-than a sweep.
+**All ten are now gone (NEH-1266), and the counts above are history rather than
+current state.** The remaining eight came out one at a time, because each site
+needed a different answer and only one of the three the issue named turned out
+to be the whole story:
+
+| site | what it was | what it is now |
+| -- | -- | -- |
+| `box`, `input-bool`, `input-surface` `glass` | a `::before` sheen whose only paint was the dead gradient | the whole pseudo-element deleted — it painted nothing, so this is a no-op on screen |
+| `box`, `input-bool`, `list` `matte` | no surface + a literal `color: "white"` justified by the phantom gradient | both gone. With no surface of its own the variant inherits its host's pairing, which is legible by construction |
+| `separator-h`, `separator-v` `aurora` | the dead gradient was the variant's ONLY paint, so `aurora` rendered identically to `none` | a real `linear-gradient(...)` over `{colors.purple.400}`/`{colors.cyan.400}` — the same call already made for `separator glass` under NEH-301 |
+
+Two things worth carrying forward:
+
+- **`list` was not named as a legibility bug and is one.** NEH-1266 called out
+  `box` and `input-bool`; measured against the emitted stylesheet,
+  `.list__root--variant_matte` had the identical `no surface + color: white`
+  pair. Read the CSS, not the issue.
+- **A passing test was pinning it in place.** `StyledList.contrast.ct.tsx`
+  asserted `matte` "states a text colour rather than inheriting", which the
+  literal `white` satisfied. Review could not have removed the defect without
+  going red. The assertion is now the positive form of the true fact — `matte`
+  paints nothing and inherits — so the coverage survived the flip.
+
+**Whether these three `matte` variants should instead take a real token surface
+is open, and it is a design call rather than a bug.** `boxBgAccent`/`textAccent`
+is the one `box`-family contract pair no other variant uses; `input-bool`'s
+control is a native checkbox that paints no background at all, so there it would
+be decoration with no effect.
+
+`src/preset/__tests__/no-inert-background-image.test.ts` is what stops the next
+one arriving: it asserts every emitted `background-image` is a production CSS
+accepts, rather than banning the one spelling that has already bitten us.
 
 ### A FOREGROUND token used as a surface (NEH-1264)
 

@@ -197,17 +197,13 @@ export const inputBoolRecipe = defineSlotRecipe({
           backdropFilter: "blur(8px)",
           fontWeight: "bold",
           lineHeight: "shorter",
-          _before: {
-            content: '""',
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            bgGradient:
-              "linear(to-br, rgba(255,255,255,0.1), rgba(255,255,255,0.05))",
-            zIndex: -1,
-          },
+          // The frosted `::before` sheen that used to sit here is gone
+          // (NEH-1266). Its only paint was `bgGradient: "linear(to-br, …)"` —
+          // Chakra v2 syntax that Panda passes through verbatim, and
+          // `linear()` is an easing function rather than an `<image>`, so
+          // every engine discarded the declaration. What was left was an
+          // absolutely-positioned pseudo-element painting nothing, so removing
+          // it changes nothing on screen. See `box.ts` for the long form.
           accentColor: "buttonBgPrimary",
           // A soft halo rather than a hard edge — the nearest painted reading
           // of "frosted".
@@ -225,11 +221,16 @@ export const inputBoolRecipe = defineSlotRecipe({
       },
       matte: {
         control: {
-          bgGradient: "linear(to-b, gray.800, gray.900)",
-          // `whiteAlpha.900` never painted (NEH-301). `white` rather than a
-          // token for the same reason as boxRecipe's matte: the surface above
-          // is a FIXED dark gradient, so themed text on it risks dark-on-dark.
-          color: "white",
+          // **No background, and no `color: "white"` either (NEH-1266).**
+          //
+          // Both used to be here, and the comment justified the literal by
+          // "the surface above is a FIXED dark gradient". There was no
+          // gradient: `bgGradient` is Chakra v2 syntax, Panda emitted
+          // `background-image: linear(to-b, gray.800, gray.900)` verbatim, and
+          // every engine discards it. So this control painted white on
+          // whatever was behind it. Inheriting is correct by construction now
+          // that it owns no surface — see `box.ts` for the full reasoning, and
+          // for why picking a token surface instead is a design call.
           fontWeight: "bold",
           accentColor: "buttonBgPrimary",
           // Wide, blurred and low-contrast: a matte surface absorbs light

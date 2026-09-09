@@ -66,41 +66,57 @@ export const boxRecipe = defineRecipe({
         boxShadow: "xl",
         fontWeight: "bold",
         borderColor: "borderBgPrimary/10",
-        _before: {
-          content: '""',
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          borderRadius: "inherit",
-          bgGradient:
-            "linear(to-br, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
-          zIndex: -1,
-        },
+        /**
+         * The frosted sheen that used to live here is GONE, not moved
+         * (NEH-1266).
+         *
+         * It was a `::before` whose only paint was
+         * `bgGradient: "linear(to-br, …)"` — Chakra v2 syntax. Panda has no
+         * `bgGradient` utility and no `linear()` shorthand, so it passed the
+         * value through verbatim as `background-image: linear(to-br, …)`.
+         * `linear()` is a CSS *easing* function, not an `<image>`, so every
+         * engine discards the declaration at parse time and the pseudo-element
+         * painted nothing. Confirmed in Chromium: `background-image: none`.
+         *
+         * What remained was an absolutely-positioned, full-bleed, `z-index: -1`
+         * pseudo-element with no paint at all, so deleting it is a no-op on
+         * screen. Restoring the sheen for real — a `linear-gradient(...)`, the
+         * spelling `aurora` already uses — would make `glass` visibly
+         * different in every consuming product, which is a design decision and
+         * not this fix.
+         */
       },
       matte: {
         px: { base: 6, md: 8 },
         py: { base: 2, md: 4 },
-        bgGradient: "linear(to-b, gray.800, gray.900)",
+        /**
+         * **`matte` paints no background, and the `color: "white"` that used to
+         * sit here has gone with the gradient that justified it (NEH-1266).**
+         *
+         * The comment this replaces said the literal was deliberate because
+         * "the surface here is `gray.800`→`gray.900`: a FIXED dark gradient".
+         * There was no gradient. `bgGradient` is Chakra v2 syntax; Panda emits
+         * `background-image: linear(to-b, gray.800, gray.900)` verbatim,
+         * `linear()` is an easing function rather than an `<image>`, and every
+         * engine discards it at parse time. So `matte` set NO background at
+         * all, and pinned its text to white over whatever was behind it —
+         * white-on-near-white on any light page. The comment asserted the
+         * opposite of what shipped, which is why review never removed it.
+         *
+         * Inheriting is now correct BY CONSTRUCTION: with no surface of its
+         * own, `matte` sits directly on its host's, and the colour it inherits
+         * is the one that host already pairs with that surface. This is the
+         * same argument `glass` is excused under in
+         * `variant-contrast-pairing.test.ts`.
+         *
+         * Giving `matte` a real token surface instead — `boxBgAccent` with
+         * `textAccent` is the one contract pair no other `box` variant uses —
+         * is a defensible alternative and a visible design change, so it is the
+         * owner's call rather than a bug fix.
+         */
         borderColor: "gray.700",
         borderWidth: "1px",
         boxShadow: "md",
-        /**
-         * `whiteAlpha.900` was undefined vocabulary, so this never painted and
-         * matte text inherited whatever it landed on — dark-on-dark against
-         * the fixed gradient above (NEH-301).
-         *
-         * `white`, not a token, and that is deliberate. The surface here is
-         * `gray.800`→`gray.900`: a FIXED dark gradient that does not follow the
-         * host's theme. Pointing the text at a host token while the surface
-         * stays fixed is how you get dark-on-dark in a light theme — a
-         * contrast regression traded for a style-rule win. The literal is the
-         * honest description of what matte currently is, and it joins the
-         * tracked literal-colour cleanup (`gray.*`, `black`/`white` in
-         * input-text.ts) that has to move the surface and the text together.
-         */
-        color: "white",
         borderRadius: "lg",
         fontWeight: "bold",
       },
