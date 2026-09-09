@@ -154,30 +154,49 @@ const COLOR_TOKENS: TokenMap = {
  * with a sensible default so every project can adopt it immediately — applied
  * to the case where a default is genuinely knowable.
  *
- * ## `textMuted` is measured. `textSubtle` is still only chosen (NEH-974)
+ * ## Both tiers are measured, and here is exactly where (NEH-974)
  *
  * Alpha de-emphasis trades contrast for hierarchy, and past some point it
  * trades away legibility, so these percentages want measuring rather than
  * picking.
  *
- * This comment claimed both tiers were measured by a file called
- * `emphasis-contrast.ct.tsx`, **and no such file has ever existed** — the whole
- * repo contains exactly one reference to that name, this one. A documented
- * guard nobody implemented is worse than an absent one: it is a guard everybody
- * believes in, and it is what made "the values below are what passed" read as a
- * measurement rather than as a guess.
+ * **This paragraph has now been wrong in both directions, which is why it names
+ * files and prints numbers rather than making a claim.**
  *
- * What is true today: `components/StyledFieldHelp.contrast.ct.tsx` measures
- * **`textMuted`** in a real browser, composited over the surface it actually
- * paints on rather than over the page, and asserts WCAG 1.4.3 AA (4.5:1). On
- * the harness theme it clears comfortably — 11.7:1 on the page, 9.1:1 on an
- * opaque card, 8.2:1 on a translucent chip over that card.
+ * It first claimed both tiers were measured by `emphasis-contrast.ct.tsx`, and
+ * no such file has ever existed — a documented guard nobody implemented, which
+ * is worse than an absent one because everybody believes in it. NEH-974 caught
+ * that. The correction then over-swung and asserted **"`textSubtle` at 64% is
+ * not measured anywhere"**, which was already false when it was written:
+ * `preset/emphasis.ct.tsx` had been measuring BOTH tiers since 2026-08-12, a
+ * week earlier, in the same directory.
  *
- * **`textSubtle` at 64% is not measured anywhere.** It is the tier closer to
- * the legibility floor, so it is the one that needed the check more. Tracked;
- * do not restore the claim that it passed something.
+ * What is measured, all in a real browser, all asserting WCAG 1.4.3 AA
+ * (4.5:1), all compositing the `color-mix` alpha onto the surface underneath
+ * rather than reading a colour off one element:
  *
- * A host that wants a stronger or weaker step defines the property.
+ * | test | surface | `textMuted` | `textSubtle` |
+ * | -- | -- | -- | -- |
+ * | `preset/emphasis.ct.tsx` | `boxBgMain` | 10.65:1 | 7.51:1 |
+ * | `preset/emphasis.ct.tsx` | `boxBgPrimary` | 9.07:1 | 6.61:1 |
+ * | `preset/emphasis.ct.tsx` | translucent chip over an opaque card | 8.18:1 | 6.05:1 |
+ * | `components/StyledFieldHelp.contrast.ct.tsx` | the same three, for the one component that paints itself `textMuted` | ✅ | — |
+ *
+ * On the harness theme, and that is the caveat that matters: these are the
+ * FALLBACK percentages measured against one theme, not a claim about every
+ * theme a host may wear. What generalises is the shape — the tiers are
+ * `currentColor`-relative, so they de-emphasise whatever they inherit — and
+ * that is asserted separately in the same file.
+ *
+ * The third row is the one that needed adding, and it is the one that would
+ * catch a real mistake: the chip is `color-mix(... transparent)`, so its own
+ * `background-color` says nothing about what shows through it. Measured
+ * against the page instead of the composited chain, the same text reads
+ * **1.03:1** — a catastrophic failure describing a rendering nobody sees.
+ *
+ * A host that wants a stronger or weaker step defines the property. If these
+ * numbers move, they are what DECIDE the percentages below: a change that
+ * fails those tests is the change being wrong, not the threshold.
  */
 const EMPHASIS_TOKENS: Record<string, [suffix: string, fallback: string]> = {
   /** Secondary information: still read, just not first. */
