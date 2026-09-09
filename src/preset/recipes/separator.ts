@@ -30,7 +30,24 @@ export const separatorVerticalRecipe = defineRecipe({
         borderColor: "gray.400",
       },
       aurora: {
-        bgGradient: "linear(to-b, purple.400, cyan.400)",
+        /**
+         * A REAL gradient. `bgGradient: "linear(to-b, …)"` was Chakra v2
+         * syntax (NEH-1266): Panda has no such utility and no `linear()`
+         * shorthand, so it emitted `background-image: linear(to-b, …)`
+         * verbatim, `linear()` is a CSS *easing* function rather than an
+         * `<image>`, and every engine discarded the declaration at parse time.
+         *
+         * That declaration was this variant's ONLY paint, so `aurora` rendered
+         * nothing — indistinguishable from `none` — for the whole life of the
+         * package. Deleting it would have made a public variant permanently
+         * inert; restoring it is the same call already made one variant up,
+         * where `glass` was fixed to paint rather than dropped (NEH-301).
+         *
+         * `backgroundImage` with `linear-gradient(...)` is the spelling
+         * `box.ts` and `list.ts` `aurora` already use.
+         */
+        backgroundImage:
+          "linear-gradient(to bottom, {colors.purple.400}, {colors.cyan.400})",
       },
       matte: {
         backgroundColor: "gray.700",
@@ -71,7 +88,11 @@ export const separatorHorizontalRecipe = defineRecipe({
         borderColor: "gray.400",
       },
       aurora: {
-        bgGradient: "linear(to-r, purple.400, cyan.400)",
+        // See the vertical recipe above — same dead `bgGradient`, same fix
+        // (NEH-1266). Left-to-right rather than top-to-bottom, matching the
+        // direction the dead declaration asked for.
+        backgroundImage:
+          "linear-gradient(to right, {colors.purple.400}, {colors.cyan.400})",
       },
       matte: {
         backgroundColor: "gray.700",

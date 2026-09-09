@@ -137,18 +137,12 @@ export const inputSurfaceVariants = {
       cursor: "not-allowed",
       boxShadow: "none",
     },
-    _before: {
-      content: '""',
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      borderRadius: "inherit",
-      bgGradient:
-        "linear(to-br, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
-      zIndex: -1,
-    },
+    // The frosted `::before` sheen that used to sit here is gone (NEH-1266).
+    // Its only paint was `bgGradient: "linear(to-br, …)"`, Chakra v2 syntax
+    // that Panda passes through verbatim; `linear()` is an easing function
+    // rather than an `<image>`, so every engine discarded it and the
+    // pseudo-element painted nothing. This map feeds both `input-text` and
+    // `input-dropdown`, so it was three emitted rules, all inert.
   },
   matte: {
     bg: "buttonBgSecondary",

@@ -144,12 +144,19 @@ export const listRecipe = defineSlotRecipe({
       },
       matte: {
         root: {
-          bgGradient: "linear(to-b, gray.800, gray.900)",
-          // A deliberate literal, matching `box.ts` and `input-bool.ts`: this
-          // variant's surface is a FIXED dark gradient rather than a token, so
-          // themed text renders dark-on-dark in a light theme. The literal is
-          // correct until the surface and the text move onto tokens together.
-          color: "white",
+          // **No background, and no `color: "white"` (NEH-1266).**
+          //
+          // This variant carried the same pair as `box.ts` and
+          // `input-bool.ts` and for the same stated reason — "this variant's
+          // surface is a FIXED dark gradient". It never was: `bgGradient` is
+          // Chakra v2 syntax, `linear()` is an easing function rather than an
+          // `<image>`, and the declaration was discarded at parse time. So the
+          // list painted white rows on whatever was behind them.
+          //
+          // NEH-1266 named `box` and `input-bool` as the two live legibility
+          // bugs and listed this file only for its dead declaration. Measured
+          // against the emitted stylesheet, `.list__root--variant_matte` had
+          // the identical defect, so it is fixed the identical way.
           borderColor: "gray.700",
           borderWidth: "1px",
           borderRadius: "lg",
