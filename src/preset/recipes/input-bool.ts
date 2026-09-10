@@ -271,8 +271,25 @@ export const inputBoolRecipe = defineSlotRecipe({
        */
       none: {
         control: {
-          color: "buttonTextPrimary",
-          bg: "gray.300",
+          /**
+           * The same contract pair `solid` states, which is what the note
+           * above has always CLAIMED this variant renders (NEH-1264).
+           *
+           * It shipped `gray.300` under `buttonTextPrimary`, so the paragraph
+           * asserting that `none` and `solid` "render identically,
+           * deliberately" described something that was not true of the emitted
+           * CSS: `solid` paints `buttonBgAccent`/`buttonTextAccent`, this
+           * painted a fixed light chip and a themed glyph colour — 1.47:1 on
+           * the README starter theme, were it ever to paint.
+           *
+           * As `solid`'s own note records, neither declaration paints on a
+           * checkbox at `appearance: auto`, so nothing anyone can see changes.
+           * That is precisely why it is worth correcting: a declaration left
+           * in place should not be left wrong, and the day NEH-310 option 2
+           * makes these paint, this one would paint a theme-independent grey.
+           */
+          color: "buttonTextAccent",
+          bg: "buttonBgAccent",
           accentColor: "buttonBgPrimary",
           boxShadow: "none",
         },
