@@ -172,9 +172,30 @@ export const buttonRecipe = defineRecipe({
         borderRadius: "xl",
         bg: "boxBgAccent",
       },
+      /**
+       * `none` means UNSTYLED, so it paints no surface of its own (NEH-1264).
+       *
+       * It shipped `bg: "white"` — a fixed raw-palette literal — under
+       * `textMain`, which is whatever the HOST defines. On this package's own
+       * README starter theme, which is dark, that is `#f8fafc` on `#fff`:
+       * **1.05:1**, past low contrast and into invisible. The same defect
+       * class as NEH-881, one step worse, and no existing sweep could see it:
+       * NEH-441 asks whether a painted variant states a colour (it did),
+       * NEH-877 fires only when the surface is a token the contract names a
+       * partner for (a raw literal is not), and NEH-1264's own guard fires
+       * only when the surface is a FOREGROUND token (`white` is not).
+       *
+       * Inheriting is read off the contract rather than chosen: `box`, `stack`
+       * and `form` all spell `none` as "no border, no surface of my own", and
+       * `textMain` is the contract's partner for `boxBgMain` — the page ground
+       * this now inherits. So the recipe moves onto the pairing
+       * `RECIPE_CONTRAST_PAIRS` already declares for it, rather than the table
+       * moving onto the recipe.
+       */
       none: {
         color: "textMain",
-        bg: "white"
+        border: "none",
+        backgroundColor: "inherit",
       },
       unstyled: {
         color: "inherit",

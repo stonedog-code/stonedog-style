@@ -217,12 +217,25 @@ export const buttonIconRecipe = defineRecipe({
           borderColor: "gray.700",
         },
       },
+      /**
+       * `none` means UNSTYLED — the sibling of `buttonRecipe`'s own `none`,
+       * which it now matches (NEH-1264).
+       *
+       * It shipped a fixed `gray.300` fill under `textMain`, a themed colour:
+       * `#f8fafc` on `#d1d5db` is **1.41:1** on this package's README starter
+       * theme. The `_hover` stepped to another raw literal, so the hover was
+       * the same defect a shade lighter.
+       *
+       * The hover goes rather than moving to a token. Replacing one guess with
+       * another is not a fix, and `none` is the variant that exists to decline
+       * decoration — `buttonRecipe`'s `none` has never had a hover. A caller
+       * that wants an affordance has `ghost`, whose hover is already measured
+       * against the contract.
+       */
       none: {
         color: "textMain",
-        bg: "gray.300",
-        _hover: {
-          bg: "gray.100",
-        },
+        border: "none",
+        backgroundColor: "inherit",
       },
     },
   },
