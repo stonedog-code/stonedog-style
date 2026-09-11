@@ -285,6 +285,64 @@ test.describe("fixedSize still pins to md on every control", () => {
  * is the one with the least room to spare.
  */
 test.describe("an offset never falls off the scale", () => {
+  /**
+   * THE ASSERTION A PLANT PROVED WAS MISSING.
+   *
+   * Deleting the clamp from `offsetFontSize` — `Math.min(Math.max(…))` replaced
+   * by a bare `index + steps` — left this whole file green. The reason is worth
+   * recording, because it is exactly the failure this repo keeps repeating:
+   * `offsetFontSize` ends `FONT_SIZE_ORDER[clamped] ?? size`, a total-safety
+   * fallback that returns the BASE key for an out-of-range index. At the `xs`
+   * profile the base and the bottom tier are the same key, so every assertion
+   * below agreed with an unclamped implementation.
+   *
+   * The two differ one rung up. At the `sm` profile, `icon-1x` is two steps
+   * down: clamped it lands on the bottom tier, unclamped it falls back to the
+   * base and comes out LARGER than `icon-sm`, which is only one step down. The
+   * ladder goes non-monotonic in the middle — the same shape NEH-251 found when
+   * `md` rendered smaller than `sm`.
+   *
+   * So the claim that catches it is about the ORDER of the four control sizes,
+   * not about any one of them. (The top of the ramp is covered in
+   * `font-size-profile.ct.tsx`, which renders a `9xl` size; nothing here gets
+   * near it.)
+   */
+  for (const profile of PROFILES) {
+    test(`the control-size ladder stays in order at the ${profile} profile`, async ({
+      mount,
+    }) => {
+      const component = await mount(
+        <div>
+          <ControlFontSizeHarness profile={profile} />
+        </div>,
+      );
+
+      const measured: number[] = [];
+      for (const size of ICON_SIZES) {
+        measured.push(await px(component.getByTestId(`icon-${size}`)));
+      }
+
+      // Non-decreasing, not strictly increasing: at the bottom of the ramp
+      // there is no room underneath body text, so the lower rungs land on the
+      // bottom tier together. Demanding strictness here would demand that the
+      // clamp not exist.
+      for (let i = 1; i < measured.length; i += 1) {
+        expect(
+          measured[i]!,
+          `icon size "${ICON_SIZES[i]}" (${measured[i]}px) is smaller than "${ICON_SIZES[i - 1]}" (${measured[i - 1]}px) at the ${profile} profile`,
+        ).toBeGreaterThanOrEqual(measured[i - 1]!);
+      }
+
+      // …and where the ramp has room it IS strict, or "actually distinct" is a
+      // claim nothing makes.
+      if (profile === "md" || profile === "lg" || profile === "xl") {
+        for (let i = 1; i < measured.length; i += 1) {
+          expect(measured[i]!).toBeGreaterThan(measured[i - 1]!);
+        }
+      }
+    });
+  }
+
   test("at the SMALLEST profile a below-body control matches body rather than shrinking past it", async ({
     mount,
   }) => {
