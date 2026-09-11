@@ -782,6 +782,94 @@ so far:
   screen readers now announce it. Nothing visual changes, but a test asserting
   the old silence will fail, and it should.
 
+## Copy — sentence case, in every consumer
+
+Every app built on this package writes its interface text the same way. This is
+a writing rule rather than a component: nothing here can enforce it at render
+time, so each app carries its own guard (see the last step below).
+
+**Sentence case for all interface copy** — page and section headings, widget and
+tile titles, buttons, links, menu and navigation items, tabs, form labels,
+placeholders, tooltips, dialog titles, toasts, empty states and email subjects.
+Capitalise the first word and proper nouns, and nothing else.
+
+| Write | Not |
+|---|---|
+| Care tools | Care Tools |
+| Task summary | Task Summary |
+| Search tools… | Search Tools... |
+| Add a new item | Add A New Item |
+
+Why: sentence case is quicker to read, and the shape of a lower-case word is a
+recognition cue that a row of capitals flattens — which matters most to readers
+with low vision or a heavy cognitive load, the audience several consumers serve.
+The other half is consistency. Without one rule every author chooses, and a
+single screen ends up with "Care Tools" directly above "Search tools…".
+
+### Proper nouns are the only exception, and they are listed
+
+Three kinds of word keep their own capitals:
+
+1. **Company and product names**, spelled exactly like this in copy:
+
+   | Name | In copy |
+   |---|---|
+   | HopperGuard | HopperGuard |
+   | Rozcards | Rozcards |
+   | Optima Filings | Optima Filings |
+   | StoneDogCode | StoneDogCode |
+   | nehsa.net | nehsa.net (lower case, even at the start of a sentence) |
+
+   These spellings govern **rendered copy only**. Identifiers — repository,
+   package, service, domain, environment-variable and class names such as
+   `rozcards`, `optima-filings-cloud` or `RozCardsScanner` — are not copy and
+   are not renamed to match.
+2. **Named product features** that appear in the app's registry.
+3. **Third-party names** — LinkedIn, Google Play, Stripe.
+
+**A word is a proper noun because it is in the registry, not because it feels
+important.** That is the whole mechanism: a section label like "Care tools" or
+a tile like "Task summary" describes what it holds and is not a name, and the
+registry is what stops it from arguing its way into capitals. Acronyms keep
+theirs (PIN, AI, SSO).
+
+### Never recase what a person typed
+
+Note titles, contact names and saved website names are displayed exactly as
+they were entered. No `toTitleCase()` and no `text-transform` on user data —
+"test" stays "test".
+
+### Don't fake casing with CSS
+
+No `text-transform: uppercase | capitalize | lowercase` on copy. The string in
+the DOM is what review reads, what a guard scans and what a copied selection
+pastes; a transform makes all three disagree with the pixels. Runs of capitals
+are also harder to read for low-vision users.
+
+### Punctuation
+
+- **The ellipsis is one character, `…`** (U+2026), never three full stops.
+- **No full stop at the end of a title, button or label.** Full sentences in
+  body copy and help text keep theirs.
+
+### Adding the guard to an app
+
+1. **A registry** — one module listing the product's proper nouns (brand,
+   feature names, third-party names in use), each with a pointer to where the
+   name is defined, so the list is checkable rather than remembered.
+2. **A unit test** that scans the app's source for copy-bearing string literals
+   — headings, titles, buttons, labels, tooltips — strips comments first (so a
+   rationale can quote a bad example), and fails on any word after the first
+   that starts with a capital and is not in the registry.
+3. **Make it prove itself.** Print how many files and strings it examined, and
+   include a test that plants a Title Case label and asserts the guard fails. A
+   guard that has only ever been seen passing has not been tested.
+4. **An allowlist only for sites another open change owns**, each entry naming
+   that change. It should only ever shrink.
+
+The guard lives in each app for now, and moves into this package once a second
+app adopts it.
+
 ## Development
 
 ```bash
