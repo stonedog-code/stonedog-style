@@ -3,6 +3,8 @@
 import React from "react";
 import { css, cx } from "styled-system/css";
 import { tagRecipe } from "styled-system/recipes";
+import { useResolvedFontSize } from "../config/style-config";
+import type { FontSizeKey } from "../config/types";
 import type { AlertStatus } from "./StyledAlert";
 
 /**
@@ -66,6 +68,24 @@ export interface StyledTagProps
    * navigable but tedious.
    */
   removeLabel?: string;
+  /**
+   * Which step of the text scale the tag reads at.
+   *
+   * **Relative, exactly as on `StyledText`** — `size="sm"` is "one step below
+   * body text", not a fixed 14px. The default IS `sm`, because that is the
+   * relationship `tagRecipe` has always encoded: a tag is a step quieter than
+   * the sentence around it.
+   *
+   * The recipe said it with an absolute key, and an absolute key is inert. A
+   * tag read at 14px on this package's ramp and 17px on HopperGuard's whatever
+   * the reader had chosen — including at the `xs` profile, where it was LARGER
+   * than the body text beside it, and at `xl`, where it was 15px smaller.
+   * Defaulting `size` to `sm` here is arithmetically the identity at
+   * `profile="md"` on every ramp, so nothing moves at the default setting.
+   */
+  size?: FontSizeKey;
+  /** Pin to the `md` step rather than following the reader's profile. */
+  fixedSize?: boolean;
 }
 
 /**
@@ -96,11 +116,21 @@ export const StyledTag = React.forwardRef<HTMLSpanElement, StyledTagProps>(
       indicator,
       onRemove,
       removeLabel = "Remove",
+      size = "sm",
+      fixedSize,
       className,
+      style,
       ...rest
     },
     ref,
   ) {
+    /*
+     * A recipe is static CSS and cannot read a React context, so the relative
+     * size is resolved here and applied inline, overriding the recipe's static
+     * fallback. Same arrangement as `StyledLink` and `StyledButton`.
+     */
+    const fontSize = useResolvedFontSize({ size, fixedSize });
+
     return (
       <span
         ref={ref}
@@ -110,6 +140,8 @@ export const StyledTag = React.forwardRef<HTMLSpanElement, StyledTagProps>(
          * to Panda's extractor, and `staticCssRecipes` is what covers it.
          */
         className={cx(tagRecipe({ tone }), className)}
+        // A caller's own `style` spreads after ours, so it still wins outright.
+        style={{ fontSize, ...style }}
         {...rest}
       >
         {indicator !== undefined && <span aria-hidden="true">{indicator}</span>}

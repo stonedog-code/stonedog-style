@@ -3,6 +3,8 @@
 import React from "react";
 import { alertRecipe } from "styled-system/recipes";
 import { cx } from "styled-system/css";
+import { useResolvedFontSize } from "../config/style-config";
+import type { FontSizeKey } from "../config/types";
 
 /** The four things an alert can be. */
 export type AlertStatus = "info" | "success" | "warning" | "error";
@@ -67,6 +69,28 @@ export interface StyledAlertProps
    */
   indicator?: React.ReactNode;
   children?: React.ReactNode;
+  /**
+   * Which step of the text scale the banner reads at.
+   *
+   * **Relative, exactly as on `StyledText`**, and the default is body size.
+   *
+   * The recipe set no `font-size` on `root`, `title` or `description`, and a
+   * `<div>` inherits — which sounds like it follows the reader and does not. A
+   * host defines `--font-sizes-*` at `:root` **statically**; the profile works
+   * by selecting a different KEY, so a component that never names a key never
+   * sees the setting. Worse, HopperGuard leaves the document at the browser's
+   * 16px while pinning `--font-sizes-md` to 1.375rem, so an alert rendered
+   * **22px smaller than the sentence above it** at the `xl` profile and 6px
+   * smaller at the default one. Measured, at every profile, on both ramps: a
+   * flat 16px.
+   *
+   * The two Optima products set `body { font-size: var(--font-sizes-md) }`, so
+   * for them this changes nothing at `profile="md"` — the banner was already
+   * reading the value it now names.
+   */
+  size?: FontSizeKey;
+  /** Pin to the `md` step rather than following the reader's profile. */
+  fixedSize?: boolean;
 }
 
 /**
@@ -80,10 +104,16 @@ export interface StyledAlertProps
  */
 export const StyledAlert = React.forwardRef<HTMLDivElement, StyledAlertProps>(
   function StyledAlert(
-    { status = "info", title, indicator, children, className, ...rest },
+    { status = "info", title, indicator, children, className, size, fixedSize, style, ...rest },
     ref,
   ) {
     const classes = alertRecipe({ status });
+    /*
+     * Set on the ROOT alone. The title, the description and the indicator are
+     * all sized in `em` or inherit, so one declaration moves the whole banner
+     * and none of its parts can drift out of proportion with the others.
+     */
+    const fontSize = useResolvedFontSize({ size, fixedSize });
     const glyph = indicator === undefined ? GLYPH_FOR_STATUS[status] : indicator;
 
     return (
@@ -97,6 +127,8 @@ export const StyledAlert = React.forwardRef<HTMLDivElement, StyledAlertProps>(
         role={ROLE_FOR_STATUS[status]}
         aria-live={ROLE_FOR_STATUS[status] === "alert" ? "assertive" : "polite"}
         className={cx(classes.root, className)}
+        // A caller's own `style` spreads after ours, so it still wins outright.
+        style={{ fontSize, ...style }}
         {...rest}
       >
         {glyph !== null && (

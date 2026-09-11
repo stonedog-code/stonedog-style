@@ -8,6 +8,29 @@ export const buttonRecipe = defineRecipe({
     justifyContent: "center",
     // A `<button>` does not inherit the page font — see input-surface (NEH-289).
     fontFamily: "body",
+    /**
+     * The neutral middle of the ramp, so a recipe used WITHOUT `StyledButton`
+     * never falls through to the user-agent stylesheet (NEH-1561).
+     *
+     * This recipe declared no `font-size` at all, and a `<button>` does not
+     * inherit one: Chrome's UA sheet gives it **13.3333px**. Measured on this
+     * package's own component tier, at every profile and on both ramps — the
+     * same defect `icon-button.ts` fixed for its `md` variant in NEH-251, one
+     * recipe along.
+     *
+     * The visible label was never at 13.33px, because `StyledButton` wraps its
+     * children in a `StyledText` that resolves the profile. What WAS at 13.33px
+     * is everything measured in `em` against the button's own box — the
+     * `IconSlot` gap, whose comment claims it "tracks the button's own font
+     * size, which this system changes app-wide via the font-size profile". It
+     * did not; it was 6.67px at all five profiles.
+     *
+     * `StyledButton` overrides this inline with the reader's resolved size, so
+     * this value is what a bare `buttonRecipe()` renders at, not what the
+     * component renders at. One declaration, not a per-variant ladder: a
+     * relative size is the component's job.
+     */
+    fontSize: "var(--font-sizes-md, 1rem)",
     fontWeight: "semibold",
     padding: "calc(.2rem + var(--panda-density-padding, 8px))",
     /**

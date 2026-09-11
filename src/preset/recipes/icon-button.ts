@@ -8,6 +8,24 @@ export const buttonIconRecipe = defineRecipe({
     justifyContent: "center",
     // A `<button>` does not inherit the page font — see input-surface (NEH-289).
     fontFamily: "body",
+    /**
+     * One neutral declaration, replacing the four absolute per-variant ones
+     * (NEH-1561).
+     *
+     * NEH-251 put `fontSize` on each `size` variant to close a real hole: a
+     * `<button>` inherits no font, so the empty `md` variant fell through to
+     * Chrome's UA sheet at **13.3333px** and rendered smaller than `sm`. The
+     * fix was right and the values were absolute — `0.75rem`, `0.875rem`,
+     * `1rem`, `1.25rem` — so the glyph measured 12/14/16/20px at every profile
+     * on every ramp. A reader who turns their text size up got the same icon.
+     *
+     * `StyledIconButton` now resolves the glyph size against the reader's
+     * profile and applies it inline, mapping each `size` onto the step it
+     * already meant on the package's own ramp (`1x`->xs, `sm`->sm, `md`->md,
+     * `lg`->xl). This base keeps the UA hole closed for a bare
+     * `buttonIconRecipe()`; the component's value is the one that ships.
+     */
+    fontSize: "var(--font-sizes-md, 1rem)",
     borderRadius: "full",
     padding: "calc(.1rem + var(--panda-density-padding, 8px))",
     /**
@@ -29,38 +47,30 @@ export const buttonIconRecipe = defineRecipe({
   },
   variants: {
     size: {
+      /*
+       * Padding only. The glyph size these variants used to state is now
+       * resolved against the reader's font-size profile by `StyledIconButton`
+       * and applied inline — see the `fontSize` note on the base (NEH-1561).
+       *
+       * The hit area is untouched and stays on the base: `size="1x"` exists to
+       * make an icon look small in a dense toolbar, never to make it hard to
+       * hit. A 20px control is a WCAG 2.5.5 failure whatever it is called.
+       */
       "1x": {
         padding: "2px",
-        fontSize: "0.75rem",
       },
       sm: {
         padding: "4px",
-        fontSize: "0.875rem",
       },
-      /**
-       * `md` states its font size rather than inheriting (NEH-251).
-       *
-       * It used to be `{}`. That does not mean "the base size" — the base sets
-       * no `font-size`, so a `<button>` fell through to the USER-AGENT
-       * stylesheet, which in Chrome is `13.3333px`. Three consequences, none
-       * of them visible without measuring:
-       *
-       *   - `md` rendered SMALLER than `sm` (13.33px vs 14px), so the size
-       *     scale ran 12, 14, 13.33, 20 — non-monotonic in the middle
-       *   - the default icon button was the one control in the system not
-       *     using the type scale at all
-       *   - it was a px value, so it ignored the browser's own font setting
-       *
-       * Found by the component tier the moment it started asserting glyph size
-       * instead of box size; the old assertion only required two distinct box
-       * heights, which a broken middle satisfies.
+      /*
+       * `md` is now genuinely empty, and that is safe in a way it was not
+       * before: the base states a `font-size`, so this no longer falls through
+       * to the user-agent's 13.3333px. Panda still needs the key present for
+       * `md` to be a selectable variant.
        */
-      md: {
-        fontSize: "1rem",
-      },
+      md: {},
       lg: {
         padding: "12px",
-        fontSize: "1.25rem",
       },
     },
     variant: {

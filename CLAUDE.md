@@ -153,6 +153,46 @@ and nothing visible until someone looks at the pixels.
 | `StyledBox` layout props reach the children | the root parents them directly | new in **0.23.0** (NEH-1475); before it, `display`/`flexDirection`/`alignItems`/`gap` on a `StyledBox` were **inert** |
 | an explicit `size` on `StyledText`/`StyledHeading`/`StyledLink` | a step RELATIVE to `fontSizeProfile` | new in **0.26.0** (NEH-1561); before it, a `size` prop **overrode the user's font-size setting entirely** |
 | `StyledLink` font size | follows the profile, like `StyledText` | new in **0.26.0** (NEH-1561); before it, this file had **no font-size logic at all** and a link took whatever it inherited |
+| `StyledButton` / `StyledIconButton` / `StyledTag` / `StyledAlert` / `StyledTable` font size | follows the profile, relative to it | new in **0.27.0** (NEH-1561); before it, **none of the five saw the reader's setting** |
+
+**0.27.0 finishes what 0.26.0 started, and the five components needed five
+different fixes because they were frozen five different ways.** "The recipe sets
+no `fontSize`" was true of exactly one of them; the others held a value, and a
+value has to be *replaced* with a decision rather than filled in:
+
+| component | was | now | measured, before |
+|---|---|---|---|
+| `StyledButton` | `buttonRecipe` declared no `font-size`, and a `<button>` inherits none | the box resolves the profile, and `size`/`fixedSize` reach the label | the LABEL already followed the profile (it is wrapped in a `StyledText`); the **box** sat at the UA's **13.3333px** at all five profiles, and the `IconSlot`'s `0.5em` gap rode on it |
+| `StyledIconButton` | an absolute rem per `size` variant | each `size` maps to the STEP it already meant (`1x`→xs, `sm`→sm, `md`→md, `lg`→xl), resolved against the profile | **12 / 14 / 16 / 20px**, flat across every profile and both ramps |
+| `StyledTag` | the static token `sm` | `size` defaults to `sm` — the same step, read relatively | **14px** (package ramp) / **17px** (HopperGuard's), flat |
+| `StyledAlert` | nothing on `root`/`title`/`description`; `indicator` pinned to the `lg` token | the root resolves the profile; the indicator is `1.125em` so it tracks the message | **16px**, flat — and on HopperGuard a **27px glyph beside 16px text** |
+| `StyledTable` | `fontSize: "14px"`, a px literal this repo forbids outright | `textSize` defaults to `sm`; `line-height` becomes unitless `1.4286` | **14px / 20px**, flat, ignoring the browser's own font setting as well as the profile |
+
+**At `profile="md"` on the package's own ramp every one of the five is
+byte-identical to 0.26.0 except the button's box** (13.3333px → 16px, closing
+the user-agent hole) — measured in a real browser, both ramps, five profiles, in
+`control-font-size.ct.tsx`. **Both Optima products run that ramp** and set `body
+{ font-size: var(--font-sizes-md) }` over a 1rem `md`, so they render unchanged
+at the profile they pin.
+
+**HopperGuard does move, and that is the fix rather than a side effect.** It
+pins `--font-sizes-md: 1.375rem` while leaving the DOCUMENT at the browser's
+16px, so every component that inherited rather than naming a key was reading a
+size its own type scale had abandoned — an alert 6px smaller than the sentence
+above it at the default profile, and 16px smaller at `xl`.
+
+**The `:root` variables were not an available shortcut.** The thirteen
+`--font-sizes-*` values are the SCALE, not a step on it: a host writes them once,
+statically, and the profile works by choosing a different KEY. Making them
+profile-dependent would silently re-size every component naming a static token
+and every `rem`-based dimension in the app.
+
+**`fixedSize` still pins to `md`, and none of the five takes it by default.** It
+exists for a label inside a control whose HEIGHT cannot grow; the 48px
+tap-target floor is a `min-height`/`min-width`, so these boxes grow with their
+labels instead of cropping them — measured 48px at the bottom of the scale and
+61.375px at HopperGuard's `xl`. A button that refused to grow would be the one
+control an elderly reader could not read.
 
 **0.26.0 is the exception that proves the ordering rule, and it is worth
 understanding why it did not need one.** Reading `size` as an offset from `md`
