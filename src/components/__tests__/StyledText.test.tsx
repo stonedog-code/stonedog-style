@@ -7,7 +7,6 @@ import {
   resolveFontSizeKey,
   stepUpFontSize,
 } from "../../config/font-size";
-import type { FontSizeKey } from "../../config/types";
 
 describe("StyledText", () => {
   it("renders its children", () => {
@@ -33,17 +32,73 @@ describe("StyledText", () => {
     expect(resolveFontSizeKey({ profile: "xl" })).toBe("xl");
   });
 
-  it("lets an explicit size win over the profile", () => {
-    expect(resolveFontSizeKey({ size: "xs", profile: "xl" })).toBe("xs");
+  /**
+   * **This assertion is INVERTED, deliberately (NEH-1561).** It used to read
+   * `expect(resolveFontSizeKey({ size: "xs", profile: "xl" })).toBe("xs")`
+   * under the title "lets an explicit size win over the profile", and it was
+   * green the whole time the product was broken — because winning over the
+   * profile was the defect.
+   *
+   * A host defines `--font-sizes-*` once at `:root` with static values, so the
+   * user's setting works only by choosing a different KEY. An explicit `size`
+   * chose the key itself, and the setting stopped reaching the element: 1,394
+   * of 1,661 call sites in an eldercare product, 461 of them frozen at 12px,
+   * unmoved by a reader turning their text size all the way up.
+   *
+   * So `size` is now an OFFSET from `md` applied to the profile. `xs` is two
+   * steps below body, and two steps below `xl` is `md`.
+   *
+   * Written out because the next reader's instinct will be that this flipped
+   * by mistake. It did not — restoring the old expectation restores the bug,
+   * and `font-size-profile.ct.tsx` will fail in a real browser if anyone does.
+   */
+  it("reads an explicit size as a step relative to the profile", () => {
+    expect(resolveFontSizeKey({ size: "xs", profile: "xl" })).toBe("md");
+    expect(resolveFontSizeKey({ size: "sm", profile: "xl" })).toBe("lg");
+    expect(resolveFontSizeKey({ size: "lg", profile: "xl" })).toBe("2xl");
+  });
+
+  it("is the IDENTITY at the md profile, so a standard-scale host is untouched", () => {
+    // The single most important property of the NEH-1561 change, and the reason
+    // it could be made in a shared package with three consumers at all: the
+    // offset is read from `md` and applied to the profile, so at `md` the two
+    // cancel. Both Optima products run a standard scale at the default profile
+    // and render exactly what they rendered before.
+    for (const key of ["xs", "sm", "md", "lg", "xl", "2xl", "9xl"]) {
+      expect(resolveFontSizeKey({ size: key, profile: "md" })).toBe(key);
+      expect(resolveFontSizeKey({ size: key })).toBe(key);
+    }
+  });
+
+  it("clamps at both ends rather than running off the scale", () => {
+    // Bottom: the reader with their text size all the way down has the least
+    // room to spare, so "a step smaller" resolves to the body size instead of
+    // below the smallest tier the host offers.
+    expect(resolveFontSizeKey({ size: "xs", profile: "xs" })).toBe("xs");
+    expect(resolveFontSizeKey({ size: "sm", profile: "xs" })).toBe("xs");
+    // Top: an offset past `9xl` stops there. Unclamped this is
+    // FONT_SIZE_ORDER[14] — undefined — which renders as no font-size at all.
+    expect(resolveFontSizeKey({ size: "9xl", profile: "xl" })).toBe("9xl");
+    expect(resolveFontSizeKey({ size: "8xl", profile: "xl" })).toBe("9xl");
+  });
+
+  it("passes an unrecognised key through rather than guessing", () => {
+    // A host may legitimately extend the ramp. Turning an unknown key into
+    // `undefined` would be worse than passing it through.
+    expect(resolveFontSizeKey({ size: "nonsense", profile: "xl" })).toBe("nonsense");
   });
 
   it("pins text to md when fixedSize is set", () => {
     // Used where a label must not grow with the profile — e.g. text inside a
     // fixed-height control that would otherwise clip.
     expect(resolveFontSizeKey({ fixedSize: true, profile: "xl" })).toBe("md");
-    // ...and an explicit size still outranks the pin, or `fixedSize` would be
-    // a trap on any call site that also states a size.
+    // ...and an explicit size still resolves against that pin rather than
+    // against the profile, or `fixedSize` would be a trap on any call site that
+    // also states a size. `fixedSize` supplies the BASE and `size` is an offset
+    // from it, so this answer is unchanged by NEH-1561 — `md` minus one step is
+    // still `sm`, at every profile.
     expect(resolveFontSizeKey({ size: "sm", fixedSize: true, profile: "xl" })).toBe("sm");
+    expect(resolveFontSizeKey({ size: "sm", fixedSize: true, profile: "xs" })).toBe("sm");
   });
 
   it("falls back to md when the host names no profile", () => {
@@ -71,8 +126,26 @@ describe("StyledHeading", () => {
   // around it is at", so it is `stepUpFontSize` composed with the same
   // precedence, and both halves are checkable directly.
   it("renders one tier above the current profile, so hierarchy survives every font size", () => {
-    expect(stepUpFontSize(resolveFontSizeKey({ profile: "md" }) as FontSizeKey)).toBe("lg");
-    expect(stepUpFontSize(resolveFontSizeKey({ profile: "xl" }) as FontSizeKey)).toBe("2xl");
+    // The composition the component performs, written the way it now performs
+    // it: `StyledHeading` hands down the OFFSET (`stepUpFontSize` of the
+    // neutral origin, or of the caller's own relative size) and `StyledText`
+    // applies the profile once. Composing the other way round — resolving the
+    // profile here and stepping the absolute result — is the double
+    // application this change had to avoid, and at `xl` it lands on `4xl`.
+    expect(resolveFontSizeKey({ size: stepUpFontSize("md"), profile: "md" })).toBe("lg");
+    expect(resolveFontSizeKey({ size: stepUpFontSize("md"), profile: "xl" })).toBe("2xl");
+    // An explicit heading size keeps its relative meaning and still steps once.
+    expect(resolveFontSizeKey({ size: stepUpFontSize("2xl"), profile: "md" })).toBe("3xl");
+  });
+
+  it("steps the offset ONCE, never once per layer", () => {
+    // The regression guard for the composition above. `4xl` is what a heading
+    // at the xl profile resolves to if both layers apply the profile — the
+    // error grows with the setting, so it is worst exactly where an elder-scale
+    // product needs this to be right.
+    expect(resolveFontSizeKey({ size: stepUpFontSize("md"), profile: "xl" })).not.toBe(
+      "4xl",
+    );
   });
 
   it("clamps at the top of the scale rather than running off the end", () => {

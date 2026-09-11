@@ -151,6 +151,22 @@ and nothing visible until someone looks at the pixels.
 | `StyledSimpleGrid minTrackWidth: "0"` | `minmax(0, 1fr)` tracks | changed from `auto` in **0.21.0** (NEH-1447) |
 | `StyledGrid minTrackWidth: "0"` | `minmax(0, 1fr)` tracks | new in **0.22.0** (NEH-1453); before it, `columns` emitted no track at all |
 | `StyledBox` layout props reach the children | the root parents them directly | new in **0.23.0** (NEH-1475); before it, `display`/`flexDirection`/`alignItems`/`gap` on a `StyledBox` were **inert** |
+| an explicit `size` on `StyledText`/`StyledHeading`/`StyledLink` | a step RELATIVE to `fontSizeProfile` | new in **0.26.0** (NEH-1561); before it, a `size` prop **overrode the user's font-size setting entirely** |
+| `StyledLink` font size | follows the profile, like `StyledText` | new in **0.26.0** (NEH-1561); before it, this file had **no font-size logic at all** and a link took whatever it inherited |
+
+**0.26.0 is the exception that proves the ordering rule, and it is worth
+understanding why it did not need one.** Reading `size` as an offset from `md`
+makes the arithmetic collapse to the identity at `fontSizeProfile="md"`:
+`index(size) − index("md")` applied to `index("md")` is `index(size)`. Measured
+in a real browser across both ramps (`font-size-profile.ct.tsx`), every
+`StyledText` and `StyledHeading` pixel at the `md` profile is unchanged — so a
+consumer on a standard scale at the default profile needed no sweep and no
+opt-out. Only a NON-default profile moves, which is exactly the audience the
+setting exists for.
+
+`StyledLink` is the one thing that does change at `md`, and deliberately: it
+previously read at the document's `font-size` rather than at the body size,
+which is a defect at every profile rather than a default worth preserving.
 
 **The font scale moved; the icon default has not.** The order that made the
 font change safe is the order any future one has to follow:

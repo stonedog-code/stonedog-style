@@ -78,8 +78,29 @@ describe("components that use hooks", () => {
     // are different failures and both render as a silently passing suite.
     expect(files.length).toBeGreaterThan(10);
     expect(usingHooks.length).toBeGreaterThan(3);
-    // The component this guard was written for.
-    expect(usingHooks).toContain("StyledHeading.tsx");
+    /*
+     * A NAMED canary, so the regex going dead cannot pass as "no component uses
+     * hooks". It used to be `StyledHeading.tsx`, the component this guard was
+     * written for — and it had to move in NEH-1561, which is worth recording
+     * because "the canary stopped matching" and "the guard broke" look
+     * identical from the outside.
+     *
+     * A heading no longer reads the font-size profile itself: it hands
+     * `StyledText` a relative offset and lets that one component resolve it, so
+     * `StyledHeading.tsx` now calls no hook at all and is legitimately absent
+     * from this list. It keeps its `"use client"` anyway (see the file), which
+     * this guard does not object to — the rule is "a hook requires the
+     * directive", not "the directive requires a hook".
+     *
+     * `StyledText.tsx` is the honest replacement: it is where
+     * `useFontSizeProfile()` is now called, and it is the component whose
+     * absence from a consumer's client boundary would break every piece of text
+     * in the app rather than one heading.
+     */
+    expect(usingHooks).toContain("StyledText.tsx");
+    // …and the one that acquired a hook in the same change, for the same
+    // reason: a link sizes exactly as text does now, so it reads the profile too.
+    expect(usingHooks).toContain("StyledLink.tsx");
   });
 
   it.each(usingHooks)('%s declares "use client" as its first statement', (name) => {

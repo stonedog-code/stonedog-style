@@ -63,7 +63,55 @@ export function getFontSizeLabel(size: string): string {
 }
 
 /**
- * Which scale step a piece of text ends up at: caller → `fixedSize` → profile.
+ * Which scale step a piece of text ends up at: an OFFSET applied to a base.
+ *
+ * ## An explicit `size` is RELATIVE to the user's profile, not an absolute key
+ *
+ * `size="sm"` means *one step below body text*, not *"sm" on the host's ramp*.
+ * The offset is read from `md` — the neutral middle of `FONT_SIZE_ORDER` — and
+ * then applied to whatever step the reader has actually chosen.
+ *
+ * **At `profile="md"` that is arithmetically the identity**: the offset is
+ * `index(size) − index("md")`, the base index is `index("md")`, and the two
+ * cancel, so the result is `size` itself. A host running a standard scale at
+ * the default profile renders exactly what it rendered before this change.
+ * Only a non-default profile moves, which is the entire point.
+ *
+ * ## Why it had to change (NEH-1561)
+ *
+ * It used to read:
+ *
+ * ```js
+ * if (size) return size;        // an explicit size WINS
+ * if (fixedSize) return "md";
+ * return profile ?? "md";       // only UNSIZED text follows the setting
+ * ```
+ *
+ * A host defines `--font-sizes-*` **once, at `:root`, with static values**, so
+ * the user's setting works only by selecting a different KEY. An explicit
+ * `size` selected the key itself and the setting never reached the element.
+ * That was tolerable while almost nothing passed one — and then a codemod made
+ * 1,138 previously-inert `fontSize` props live in one commit, pinning 1,394 of
+ * 1,661 call sites in an eldercare product at 17px and 12px regardless of the
+ * setting.
+ *
+ * Reading `size` as an offset fixes every one of them at once, with no
+ * app-side change, and each site keeps the intent it was written with: "a step
+ * smaller than the sentence" stays a step smaller at every profile.
+ *
+ * ## The base, and why `fixedSize` still pins
+ *
+ * The offset is applied to `md` when `fixedSize` is set and to the profile
+ * otherwise. `fixedSize` exists for a label inside a fixed-height control that
+ * would clip if it grew, so it must stay absolute — and making it the *base*
+ * rather than an early return means `fixedSize` + `size="sm"` still resolves to
+ * `"sm"`, exactly as it did before.
+ *
+ * Both ends are clamped by `offsetFontSize`. An offset can never fall off the
+ * scale: at `profile="xs"` a smaller-than-body size resolves to `xs` rather
+ * than to nothing, and at the top it stops at `9xl`.
+ *
+ * ## Why this is a pure function
  *
  * The same precedence shape as `useResolvedVariant`, and here for the same
  * reason — but it is a *pure function* rather than a branch inside `StyledText`
@@ -79,10 +127,11 @@ export function getFontSizeLabel(size: string): string {
  * true since the scale moved.
  *
  * Splitting the rule out gives each tier a question it can actually answer:
- * *which step wins* here, and *what does it measure* in the browser tier.
- *
- * `fixedSize` pins to `md` — used where a label must not grow with the profile,
- * e.g. inside a fixed-height control it would otherwise clip.
+ * *which step wins* here, and *what does it measure* in the browser tier. The
+ * browser half is `font-size-profile.ct.tsx`, and it is the half that was
+ * missing: the guard that shipped beside the codemod asserted only that the
+ * sizes differ from **each other**, never that the profile reaches a sized
+ * element, so it passed over the regression it was written next to.
  */
 export function resolveFontSizeKey({
   size,
@@ -93,9 +142,18 @@ export function resolveFontSizeKey({
   fixedSize?: boolean | undefined;
   profile?: string | undefined;
 }): string {
-  if (size) return size;
-  if (fixedSize) return "md";
-  return profile ?? "md";
+  const base = fixedSize ? SIZE_OFFSET_ORIGIN : profile ?? SIZE_OFFSET_ORIGIN;
+  if (!size) return base;
+
+  const sizeIndex = FONT_SIZE_ORDER.indexOf(size as FontSizeKey);
+  const baseIndex = FONT_SIZE_ORDER.indexOf(base as FontSizeKey);
+  // An unrecognised key on either side: hand back the caller's `size`
+  // unchanged rather than guessing. Same "stay total, fail safe" shape as
+  // stepUpFontSize — a host may legitimately extend the ramp, and turning an
+  // unknown key into `undefined` would be worse than passing it through.
+  if (sizeIndex === -1 || baseIndex === -1) return size;
+
+  return offsetFontSize(base as FontSizeKey, sizeIndex - ORIGIN_INDEX);
 }
 
 /**
@@ -137,38 +195,59 @@ export const FONT_SIZE_ORDER: readonly FontSizeKey[] = [
   "9xl",
 ] as const;
 
-/** The next size up, clamped at the top of the scale. */
-export function stepUpFontSize(size: FontSizeKey, steps = 1): FontSizeKey {
+/**
+ * The neutral middle of the ramp. An explicit `size` is read as an offset FROM
+ * here, so that `size === SIZE_OFFSET_ORIGIN` is a no-op and the arithmetic
+ * collapses to the identity at `profile="md"`.
+ */
+const SIZE_OFFSET_ORIGIN: FontSizeKey = "md";
+const ORIGIN_INDEX = FONT_SIZE_ORDER.indexOf(SIZE_OFFSET_ORIGIN);
+
+/**
+ * Move `steps` along `FONT_SIZE_ORDER`, clamped at BOTH ends.
+ *
+ * The generalisation of `stepUpFontSize` and `stepDownFontSize`, which are now
+ * one-line wrappers over it — there is one clamp, in one place, so a relative
+ * size can never fall off either end of the scale.
+ *
+ * The clamp is the load-bearing half, and it is load-bearing in both
+ * directions. At the bottom: the reader who has turned their text size all the
+ * way down is the reader with the least room to spare, so a "one step smaller"
+ * size at `profile="xs"` must resolve to `xs` and match the body text rather
+ * than shrink past the smallest tier the host offers. At the top: a heading
+ * that already sits at `9xl` stays there rather than resolving to nothing.
+ *
+ * Steps through `FONT_SIZE_ORDER`, so it moves through whatever scale the host
+ * has pinned its `--font-sizes-*` properties to rather than through a fixed set
+ * of pixel values.
+ *
+ * Total by construction: an unrecognised key is returned unchanged rather than
+ * throwing, because these feed rendering code.
+ */
+export function offsetFontSize(size: FontSizeKey, steps: number): FontSizeKey {
   const index = FONT_SIZE_ORDER.indexOf(size);
   if (index === -1) return size;
-  const next = FONT_SIZE_ORDER[Math.min(index + steps, FONT_SIZE_ORDER.length - 1)];
-  // The index is clamped into range, so this cannot miss — but returning `size`
-  // rather than asserting keeps the function total, and a future change to the
-  // clamp fails safe instead of returning undefined to a caller typed otherwise.
-  return next ?? size;
+  const clamped = Math.min(Math.max(index + steps, 0), FONT_SIZE_ORDER.length - 1);
+  // The index is clamped into range, so this cannot miss — but returning
+  // `size` rather than asserting keeps the function total, and a future change
+  // to the clamp fails safe instead of returning undefined to a caller typed
+  // otherwise.
+  return FONT_SIZE_ORDER[clamped] ?? size;
+}
+
+/** The next size up, clamped at the top of the scale. */
+export function stepUpFontSize(size: FontSizeKey, steps = 1): FontSizeKey {
+  return offsetFontSize(size, steps);
 }
 
 /**
  * The next size DOWN, clamped at the bottom of the scale.
  *
- * The counterpart to `stepUpFontSize`, added for `StyledFieldHelp` (NEH-972),
- * and the clamp is the load-bearing half. Inline help is deliberately one tier
- * below the text it accompanies — but "one tier below" must never mean "below
- * the smallest tier the host offers", because the reader who has turned their
- * text size all the way down is the reader with the least room to spare. At
- * `xs` this returns `xs`, so help matches the body text rather than shrinking
- * past it.
- *
- * Steps through `FONT_SIZE_ORDER`, so it moves through whatever scale the host
- * has pinned its `--font-sizes-*` properties to rather than through a fixed set
- * of pixel values.
+ * The counterpart to `stepUpFontSize`, added for `StyledFieldHelp` (NEH-972).
+ * Inline help is deliberately one tier below the text it accompanies — see the
+ * clamp note on `offsetFontSize` for why "one tier below" must never mean
+ * "below the smallest tier the host offers".
  */
 export function stepDownFontSize(size: FontSizeKey, steps = 1): FontSizeKey {
-  const index = FONT_SIZE_ORDER.indexOf(size);
-  if (index === -1) return size;
-  const next = FONT_SIZE_ORDER[Math.max(index - steps, 0)];
-  // Clamped into range above, so this cannot miss — but staying total means a
-  // future change to the clamp fails safe rather than handing a caller
-  // `undefined` from a function typed otherwise. Same shape as stepUpFontSize.
-  return next ?? size;
+  return offsetFontSize(size, -steps);
 }
