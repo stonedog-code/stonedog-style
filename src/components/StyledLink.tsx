@@ -3,8 +3,14 @@
 import React from "react";
 import { buttonRecipe } from "styled-system/recipes";
 import { css, cx } from "styled-system/css";
-import { useLinkComponent, useResolvedVariant } from "../config/style-config";
+import {
+  useFontSizeProfile,
+  useLinkComponent,
+  useResolvedVariant,
+} from "../config/style-config";
+import { fontSizeMap, resolveFontSizeKey } from "../config/font-size";
 import { ALL_VARIANTS } from "../config/types";
+import type { FontSizeKey } from "../config/types";
 
 /**
  * The variants a link may take.
@@ -119,6 +125,47 @@ export interface StyledLinkProps
    * around; `control` is the honest answer for anything a finger aims at.
    */
   presentation?: LinkPresentation;
+  /**
+   * Which step of the text scale this link reads at.
+   *
+   * **Identical to `StyledText` in every respect** — same prop, same
+   * resolution through `resolveFontSizeKey`, same relative meaning. `size="sm"`
+   * is "one step below body text", not a fixed 17px, and it moves with the
+   * user's font-size profile like everything else. A link differs from body
+   * text in the affordances that mark it clickable — the variant, the hit area,
+   * the external indicator — and in nothing about size.
+   *
+   * ## Why this had to be added (NEH-1561)
+   *
+   * Until now this file contained no font-size logic at all: the only
+   * occurrence of the word "size" in it was inside a comment. A link took
+   * whatever `font-size` it inherited, and `buttonRecipe` declares none, so it
+   * fell through to the document's — which a host defines once at `:root` and
+   * never varies by profile. **A link did not move when the user changed their
+   * text size, in either direction.**
+   *
+   * That is the worst place in the UI for it to happen, because a link sits
+   * *inside a sentence*. If the sentence follows the profile and the link does
+   * not, they disagree **mid-line** — a visibly smaller word in running text.
+   * This component's own `externalIndicator` comment already makes exactly this
+   * argument for the glyph ("a character inherits `currentColor` and the font
+   * scale, so it cannot end up a different colour or size from the label beside
+   * it") and then did not apply it to the link's own text.
+   *
+   * `StyledLink.ct.tsx` asserts the fix as an EQUALITY against the surrounding
+   * `StyledText` at every profile, not against a pixel constant — a constant
+   * goes stale the moment a host retunes its ramp, and a stale constant in a
+   * green test is how the original defect survived.
+   */
+  size?: FontSizeKey;
+  /**
+   * Pin to the `md` step rather than following the user's profile.
+   *
+   * The same escape hatch `StyledText` carries, for a label inside a
+   * fixed-height control that would clip if it grew. `size` still applies as a
+   * relative offset from `md` when both are set.
+   */
+  fixedSize?: boolean;
 }
 
 /** The default external-destination glyph — "↗", north-east arrow. */
@@ -149,13 +196,17 @@ export const StyledLink = React.forwardRef<HTMLAnchorElement, StyledLinkProps>(
       variant,
       standalone = false,
       presentation,
+      size,
+      fixedSize,
       className,
+      style,
       ...rest
     },
     ref,
   ) {
     const HostLink = useLinkComponent();
     const resolved = useResolvedVariant(variant ?? "link", LINK_VARIANTS);
+    const profile = useFontSizeProfile();
 
     /*
      * `presentation` wins; `standalone` is the deprecated spelling of
@@ -164,6 +215,22 @@ export const StyledLink = React.forwardRef<HTMLAnchorElement, StyledLinkProps>(
      */
     const mode: LinkPresentation =
       presentation ?? (standalone ? "control" : "text");
+
+    /*
+     * The font scale, resolved exactly as `StyledText` resolves it: `size` is a
+     * step relative to the user's profile, `fixedSize` pins the base to `md`,
+     * and an unsized link reads at body size. See the `size` prop above.
+     *
+     * `fontSizeMap` values are `var(--font-sizes-*, …)` references, so this
+     * rides the host's own ramp rather than a pixel value baked in here — and
+     * it applies to all three presentations. The tap-target floor on `control`
+     * is a `min-height`, which is a box minimum and independent of this: the
+     * control keeps its 48px at the smallest profile, and grows past it at the
+     * largest.
+     */
+    const fontSize =
+      fontSizeMap[resolveFontSizeKey({ size, fixedSize, profile })] ??
+      fontSizeMap.md;
 
     // The variant still comes from `buttonRecipe`, so colour, underline and
     // hover stay one definition shared with every other control. Only the BOX
@@ -219,6 +286,8 @@ export const StyledLink = React.forwardRef<HTMLAnchorElement, StyledLinkProps>(
       ...(disabled ? {} : { href }),
       "aria-disabled": disabled ? true : undefined,
       className: classes,
+      // A caller's own `style` spreads after ours, so it still wins outright.
+      style: { fontSize, ...style },
       ...(newWindow
         ? {
             target: "_blank",

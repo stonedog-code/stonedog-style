@@ -288,6 +288,18 @@ the provider:
   compounds with the browser's own font-size setting rather than overriding it.
   `StyledHeading` renders one tier above whatever body text is set to, so the
   hierarchy survives every profile.
+
+  **A `size` prop on `StyledText`, `StyledHeading` or `StyledLink` is a step
+  RELATIVE to that profile, not an absolute key** (0.26.0). `size="sm"` means
+  "one step below body text" and moves with the reader's setting; `size="lg"`
+  means "one step above". The offset is read from `md`, so **at
+  `fontSizeProfile="md"` the result is identical to the key you named** — a host
+  on a standard scale at the default profile renders exactly what it always did.
+  Both ends are clamped: at the smallest profile a below-body size matches body
+  rather than shrinking past the smallest tier, and at the top it stops at `9xl`.
+
+  `fixedSize` is the opt-out. It pins the base to `md` regardless of the
+  profile, for a label inside a fixed-height control that would clip if it grew.
 - `variant` — `solid | outline | aurora | glass | matte`. Any call site may
   override it; `useResolvedVariant` applies the precedence (caller → app-wide →
   `solid`) and coerces anything the recipes have no case for.

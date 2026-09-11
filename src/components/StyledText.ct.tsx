@@ -137,20 +137,52 @@ test.describe("font size actually rendered", () => {
     });
   }
 
-  test("an explicit size outranks the profile on the rendered pixels too", async ({
+  /**
+   * **INVERTED, deliberately (NEH-1561).** This test used to be titled "an
+   * explicit size outranks the profile on the rendered pixels too" and to
+   * assert `12px` at the `xl` profile. It was green for the whole time the
+   * product was broken, because outranking the profile WAS the defect: a
+   * reader who turned their text size all the way up still got 12px, at 461
+   * call sites, on a product whose scale is deliberately shifted up for elderly
+   * users.
+   *
+   * `size` is now an offset from `md` applied to the profile, so `xs` at the
+   * `xl` profile is two steps down from `xl` — `md`, 16px on the package's own
+   * fallback ramp, which is what this harness renders because it defines no
+   * `--font-sizes-*` of its own.
+   *
+   * Restoring the old expectation restores the bug. The broader guard is
+   * `font-size-profile.ct.tsx`, which asserts the relationship rather than the
+   * constant.
+   */
+  test("an explicit size is a step RELATIVE to the profile, on the rendered pixels", async ({
     mount,
   }) => {
-    // The precedence itself is asserted against `resolveFontSizeKey` in the
-    // jest tier. This is the other half: that the key it picks is the one that
+    // The rule itself is asserted against `resolveFontSizeKey` in the jest
+    // tier. This is the other half: that the key it picks is the one that
     // reaches the browser.
     const component = await mount(
-      <StonedogStyleProvider fontSizeProfile="xl">
-        <StyledText size="xs">small anyway</StyledText>
-      </StonedogStyleProvider>,
+      <div>
+        <StonedogStyleProvider fontSizeProfile="xl">
+          <StyledText size="xs" data-testid="at-xl">
+            two steps down from xl
+          </StyledText>
+        </StonedogStyleProvider>
+        <StonedogStyleProvider fontSizeProfile="md">
+          <StyledText size="xs" data-testid="at-md">
+            two steps down from md
+          </StyledText>
+        </StonedogStyleProvider>
+      </div>,
     );
-    const size = await component
-      .getByText("small anyway")
-      .evaluate((el) => getComputedStyle(el).fontSize);
-    expect(size).toBe("12px");
+    const read = async (id: string) =>
+      component.getByTestId(id).evaluate((el) => getComputedStyle(el).fontSize);
+
+    // Two steps below `xl` is `md`; two steps below `md` clamps at `xs`.
+    expect(await read("at-xl")).toBe("16px");
+    // And the md profile is the identity, which is what leaves both Optima
+    // products — standard scale, default profile — rendering exactly what they
+    // rendered before.
+    expect(await read("at-md")).toBe("12px");
   });
 });

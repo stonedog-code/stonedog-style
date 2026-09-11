@@ -49,6 +49,7 @@ export {
   getFontSizeValue,
   stepUpFontSize,
   stepDownFontSize,
+  offsetFontSize,
   FONT_SIZE_ORDER,
 } from "./config/font-size";
 
