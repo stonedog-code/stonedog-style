@@ -137,23 +137,44 @@ export function resolveFontSizeKey({
   size,
   fixedSize,
   profile,
+  extraSteps,
 }: {
   size?: string | undefined;
   fixedSize?: boolean | undefined;
   profile?: string | undefined;
+  /**
+   * Further steps added to the offset BEFORE the single clamp — how
+   * `StyledHeading` asks for "one tier above whatever this is".
+   *
+   * It has to arrive here rather than being pre-applied by the caller, and the
+   * reason is the clamp. `StyledHeading` used to hand down
+   * `stepUpFontSize(size)`, which saturates at `9xl` — so `size="9xl"` encoded
+   * an offset of +10 instead of +11 and the heading came out the same size as
+   * the body text beside it, its whole reason for existing gone. Caught by
+   * review rather than by a test, because nothing renders a `9xl` heading
+   * today; it is fixed here so nothing has to remember not to.
+   *
+   * One offset, summed first, clamped once.
+   */
+  extraSteps?: number | undefined;
 }): string {
   const base = fixedSize ? SIZE_OFFSET_ORIGIN : profile ?? SIZE_OFFSET_ORIGIN;
-  if (!size) return base;
-
-  const sizeIndex = FONT_SIZE_ORDER.indexOf(size as FontSizeKey);
   const baseIndex = FONT_SIZE_ORDER.indexOf(base as FontSizeKey);
-  // An unrecognised key on either side: hand back the caller's `size`
-  // unchanged rather than guessing. Same "stay total, fail safe" shape as
+  // An unrecognised key on either side: hand back something the caller named
+  // rather than guessing. Same "stay total, fail safe" shape as
   // stepUpFontSize — a host may legitimately extend the ramp, and turning an
   // unknown key into `undefined` would be worse than passing it through.
-  if (sizeIndex === -1 || baseIndex === -1) return size;
+  if (baseIndex === -1) return size ?? base;
 
-  return offsetFontSize(base as FontSizeKey, sizeIndex - ORIGIN_INDEX);
+  let offset = extraSteps ?? 0;
+  if (size) {
+    const sizeIndex = FONT_SIZE_ORDER.indexOf(size as FontSizeKey);
+    if (sizeIndex === -1) return size;
+    offset += sizeIndex - ORIGIN_INDEX;
+  }
+
+  if (offset === 0) return base;
+  return offsetFontSize(base as FontSizeKey, offset);
 }
 
 /**

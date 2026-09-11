@@ -47,6 +47,19 @@ export interface StyledTextProps
   as?: React.ElementType | undefined; // Explicitly add the 'as' prop
   size?: keyof typeof fontSizeMap | undefined;
   fixedSize?: boolean | undefined;
+  /**
+   * Extra scale steps added on top of `size`, before the scale is clamped.
+   *
+   * Present for `StyledHeading`, which means "one tier above whatever this text
+   * is at" and cannot express that by pre-stepping `size`: the key vocabulary
+   * ends at `9xl`, so pre-stepping saturates and a `size="9xl"` heading comes
+   * out the same size as the body text beside it. Summing the offsets here and
+   * clamping once removes that corner.
+   *
+   * Prefer `size` at a call site. This exists so one component can compose with
+   * another's relative size without the arithmetic happening twice.
+   */
+  sizeStep?: number | undefined;
   color?: string | undefined;
   ellipsis?: boolean | undefined;
   wrap?: boolean | undefined;
@@ -102,6 +115,7 @@ const StyledText = React.forwardRef<HTMLSpanElement, StyledTextProps>((props, re
     tooltip,
     size,
     fixedSize,
+    sizeStep,
     color = "textPrimary",
     variant,
     style,
@@ -114,7 +128,12 @@ const StyledText = React.forwardRef<HTMLSpanElement, StyledTextProps>((props, re
   } = props;
   const fontSizeProfile = useFontSizeProfile();
 
-  const finalSize = resolveFontSizeKey({ size, fixedSize, profile: fontSizeProfile });
+  const finalSize = resolveFontSizeKey({
+    size,
+    fixedSize,
+    profile: fontSizeProfile,
+    extraSteps: sizeStep,
+  });
   const fontSize = fontSizeMap[finalSize] || fontSizeMap.md;
 
   const extraStyles: React.CSSProperties = {};

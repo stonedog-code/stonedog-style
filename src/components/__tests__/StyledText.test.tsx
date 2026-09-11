@@ -126,16 +126,17 @@ describe("StyledHeading", () => {
   // around it is at", so it is `stepUpFontSize` composed with the same
   // precedence, and both halves are checkable directly.
   it("renders one tier above the current profile, so hierarchy survives every font size", () => {
-    // The composition the component performs, written the way it now performs
-    // it: `StyledHeading` hands down the OFFSET (`stepUpFontSize` of the
-    // neutral origin, or of the caller's own relative size) and `StyledText`
-    // applies the profile once. Composing the other way round — resolving the
-    // profile here and stepping the absolute result — is the double
-    // application this change had to avoid, and at `xl` it lands on `4xl`.
-    expect(resolveFontSizeKey({ size: stepUpFontSize("md"), profile: "md" })).toBe("lg");
-    expect(resolveFontSizeKey({ size: stepUpFontSize("md"), profile: "xl" })).toBe("2xl");
+    // Exactly the composition the component performs: `StyledHeading` passes
+    // the caller's own relative `size` plus `sizeStep: 1`, and
+    // `resolveFontSizeKey` sums them into ONE offset and applies the profile
+    // once. Composing the other way round — resolving the profile in the
+    // heading and stepping the absolute result — is the double application this
+    // change had to avoid, and at `xl` it lands on `4xl`.
+    expect(resolveFontSizeKey({ extraSteps: 1, profile: "md" })).toBe("lg");
+    expect(resolveFontSizeKey({ extraSteps: 1, profile: "xl" })).toBe("2xl");
     // An explicit heading size keeps its relative meaning and still steps once.
-    expect(resolveFontSizeKey({ size: stepUpFontSize("2xl"), profile: "md" })).toBe("3xl");
+    expect(resolveFontSizeKey({ size: "2xl", extraSteps: 1, profile: "md" })).toBe("3xl");
+    expect(resolveFontSizeKey({ size: "2xl", extraSteps: 1, profile: "xl" })).toBe("5xl");
   });
 
   it("steps the offset ONCE, never once per layer", () => {
@@ -143,9 +144,30 @@ describe("StyledHeading", () => {
     // at the xl profile resolves to if both layers apply the profile — the
     // error grows with the setting, so it is worst exactly where an elder-scale
     // product needs this to be right.
-    expect(resolveFontSizeKey({ size: stepUpFontSize("md"), profile: "xl" })).not.toBe(
-      "4xl",
-    );
+    expect(resolveFontSizeKey({ extraSteps: 1, profile: "xl" })).not.toBe("4xl");
+  });
+
+  it("sums the offsets BEFORE clamping, so a heading at the top of the ramp keeps its step", () => {
+    /*
+     * The corner `sizeStep` exists for, found by review rather than by a test.
+     *
+     * `StyledHeading` used to hand down `stepUpFontSize(size)`, which saturates
+     * at `9xl` — so `size="9xl"` encoded an offset of +10 rather than +11 and
+     * the heading resolved to the SAME key as body text carrying the same size.
+     * A heading that is not bigger than the paragraph under it has lost the one
+     * thing it is for.
+     */
+    const heading = resolveFontSizeKey({ size: "9xl", extraSteps: 1, profile: "xs" });
+    const body = resolveFontSizeKey({ size: "9xl", profile: "xs" });
+    expect(heading).toBe("8xl");
+    expect(body).toBe("7xl");
+    expect(heading).not.toBe(body);
+    // Pre-stepping is what used to happen, and it is what this must not do.
+    expect(resolveFontSizeKey({ size: stepUpFontSize("9xl"), profile: "xs" })).toBe(body);
+  });
+
+  it("still clamps once the SUMMED offset runs off the top", () => {
+    expect(resolveFontSizeKey({ size: "9xl", extraSteps: 1, profile: "xl" })).toBe("9xl");
   });
 
   it("clamps at the top of the scale rather than running off the end", () => {

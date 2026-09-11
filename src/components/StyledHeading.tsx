@@ -34,7 +34,6 @@
 import React from "react";
 import StyledSeparator from "./StyledSeparator";
 import StyledText from "./StyledText";
-import { stepUpFontSize } from "../config/font-size";
 import type { FontSizeKey } from "../config/types";
 import type { HTMLStyledProps } from "styled-system/jsx";
 
@@ -77,24 +76,27 @@ const StyledHeading = React.forwardRef<HTMLElement, StyledHeadingProps>(
      * `profile="xl"` an unsized heading would have landed on `4xl` instead of
      * `2xl`, and the bug would have grown with the setting.
      *
-     * So what is passed down is the OFFSET, and nothing here reads the
-     * profile. `md` is the neutral origin, so an unsized heading asks for
-     * `stepUpFontSize("md")` — "one above body" — and a caller's explicit
-     * `size` keeps its own relative meaning with the same single step added.
-     * The top of the scale is clamped by `stepUpFontSize`, and clamped again
-     * after the profile is applied.
+     * The step goes down as `sizeStep` rather than as `stepUpFontSize(size)`,
+     * and the difference is the clamp. Pre-stepping saturates at the top of the
+     * key vocabulary, so `size="9xl"` would encode +10 instead of +11 and a
+     * `9xl` heading would render the same size as the body text next to it —
+     * its entire purpose gone. Summed as one offset and clamped once, it does
+     * not.
+     *
+     * Nothing here reads the profile, which is why this component no longer
+     * calls a hook.
      *
      * Verified unchanged at `profile="md"` for both branches: unsized renders
      * `lg` and `size="2xl"` renders `3xl`, exactly as before.
      */
-    const headingSize = stepUpFontSize(size ?? "md");
 
     return (
       <>
         <StyledText
           as={as}
           ref={ref}
-          size={headingSize}
+          size={size}
+          sizeStep={1}
           // The theme's heading face, so a theme can pair a display face with
           // its body face (NEH-289). Asked for here rather than in textRecipe
           // because StyledHeading shares that recipe with body copy. Written as
