@@ -41,7 +41,22 @@ export const alertRecipe = defineSlotRecipe({
       width: "1.25em",
       height: "1.5em",
       lineHeight: "1",
-      fontSize: "lg",
+      /**
+       * `em`, not the `lg` token (NEH-1561).
+       *
+       * `fontSize: "lg"` is absolute: it resolved to `var(--font-sizes-lg)` and
+       * did not move with the reader's profile — and, worse, it did not move
+       * with the banner it sits in either. On HopperGuard's ramp that put a
+       * 27px glyph beside a 16px message; the ratio was only ever right on a
+       * ramp where `lg/md` happens to be 1.125.
+       *
+       * The recipe's own comment for the glyph characters already argues for
+       * this ("a glyph inherits `currentColor` and the font scale for free, so
+       * the signal survives a font-size change"), and the box around it is
+       * already `em`. One step up from the message, expressed the same way the
+       * box is, so the three can never disagree.
+       */
+      fontSize: "1.125em",
       // The glyph inherits the chip's text colour, so it never needs a colour of
       // its own and can never disagree with the message beside it.
       color: "inherit",

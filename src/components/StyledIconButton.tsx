@@ -4,7 +4,8 @@ import React from "react";
 import type { HTMLStyledProps } from "styled-system/types";
 import { buttonIconRecipe } from "styled-system/recipes";
 import type { AllowedVariant } from "../config/types";
-import { useStyleConfig } from "../config/style-config";
+import { useResolvedFontSize, useStyleConfig } from "../config/style-config";
+import type { FontSizeKey } from "../config/types";
 import StyledTooltip from "./StyledTooltip";
 
 /**
@@ -39,6 +40,29 @@ import StyledTooltip from "./StyledTooltip";
 
 export type IconButtonSize = "1x" | "sm" | "md" | "lg";
 
+/**
+ * Which step of the text scale each control size draws its glyph at.
+ *
+ * These are the keys the old absolute values already meant. `buttonIconRecipe`
+ * stated `0.75rem / 0.875rem / 1rem / 1.25rem`, which on this package's own
+ * ramp is exactly `xs / sm / md / xl` — so at `fontSizeProfile="md"` on that
+ * ramp every one of the four resolves to the pixel it rendered before
+ * (12/14/16/20). Note `lg` maps to `xl`, not to `lg`: the original value was
+ * `1.25rem`, two steps up, and preserving what shipped matters more than a
+ * name lining up.
+ *
+ * They are `FontSizeKey`s rather than raw offsets because `resolveFontSizeKey`
+ * reads a key as a step from `md` — so the table says what a reader sees
+ * ("two steps below body") instead of an integer nobody can check against the
+ * ramp.
+ */
+const GLYPH_STEP: Record<IconButtonSize, FontSizeKey> = {
+  "1x": "xs",
+  sm: "sm",
+  md: "md",
+  lg: "xl",
+};
+
 /** Variants the icon recipe actually defines. */
 type IconButtonVariant = "solid" | "outline" | "aurora" | "glass" | "matte" | "ghost" | "none";
 
@@ -50,6 +74,17 @@ export interface StyledIconButtonProps extends HTMLStyledProps<"button"> {
   /** Also supplies the accessible name when no `aria-label` is given. */
   tooltip?: string;
   placement?: "top" | "bottom" | "left" | "right";
+  /**
+   * Pin the glyph to its absolute step rather than following the reader's
+   * profile.
+   *
+   * The escape hatch `StyledText` carries, for an icon inside a container whose
+   * height genuinely cannot grow. Not the default: this control's 48px floor is
+   * a `min-height`/`min-width`, so the box grows with the glyph rather than
+   * cropping it, and an icon that refuses to grow is unreadable to exactly the
+   * reader who turned the setting up.
+   */
+  fixedSize?: boolean;
   /** Render as something else — an anchor, for instance. */
   as?: React.ElementType;
   href?: string;
@@ -92,6 +127,7 @@ const StyledIconButton = React.forwardRef<HTMLButtonElement, StyledIconButtonPro
       children,
       variant,
       size = "md",
+      fixedSize,
       disabled,
       tooltip,
       placement,
@@ -105,6 +141,22 @@ const StyledIconButton = React.forwardRef<HTMLButtonElement, StyledIconButtonPro
     const { variant: appVariant } = useStyleConfig();
     const requested = variant ?? appVariant;
     const painted = toIconVariant(requested);
+
+    /*
+     * The glyph size, resolved against the reader's profile (NEH-1561).
+     *
+     * It used to live on the recipe as four absolute rem values, so the icon
+     * measured 12/14/16/20px at every profile on every ramp. A recipe is static
+     * CSS and cannot read a React context, so the relative answer has to be
+     * computed here and applied inline — the same arrangement `StyledLink` and
+     * `StyledButton` use.
+     *
+     * This sizes a TEXT glyph. An icon drawn by `StyledIcon` is boxed in px
+     * from the app-wide `iconSize`, which is a separate setting and is not
+     * changed here; pinning that default is step 1 of its own ordering (see
+     * CLAUDE.md).
+     */
+    const fontSize = useResolvedFontSize({ size: GLYPH_STEP[size], fixedSize });
 
     const Element = as as React.ElementType;
 
@@ -141,7 +193,8 @@ const StyledIconButton = React.forwardRef<HTMLButtonElement, StyledIconButtonPro
           // 43 icon buttons unnamed (a further 10 have neither, which only the
           // call sites can fix).
           aria-label={ariaLabel ?? tooltip}
-          style={zIndex !== undefined ? { ...(style || {}), zIndex } : style}
+          // A caller's own `style` spreads after ours, so it still wins outright.
+          style={{ fontSize, ...(style || {}), ...(zIndex !== undefined ? { zIndex } : {}) }}
           onClick={onClick}
           // Only a real <button> understands `disabled`; on an <a> it is
           // meaningless and React would emit an invalid attribute.

@@ -59,7 +59,23 @@ export const tagRecipe = defineRecipe({
      * not apply to it — the remove BUTTON inside `StyledTag` is, and states its
      * own.
      */
-    fontSize: "sm",
+    /**
+     * The static fallback for a bare `tagRecipe()`; `StyledTag` overrides it
+     * inline with the same step resolved against the reader's profile
+     * (NEH-1561).
+     *
+     * `fontSize: "sm"` was an ABSOLUTE key. It resolves to
+     * `var(--font-sizes-sm)` and never moves, so a tag read at 14px (this
+     * package's ramp) or 17px (HopperGuard's) whatever the reader had chosen —
+     * one of five components that sat outside the font-size setting entirely.
+     *
+     * The intent behind the key was relative all along: "a step below the
+     * sentence". `StyledTag` now says exactly that, defaulting `size` to `sm`,
+     * which is the identity at `profile="md"` on every ramp — so this
+     * declaration and the component's agree at the default profile and diverge
+     * only where the setting is supposed to bite.
+     */
+    fontSize: "var(--font-sizes-sm, 0.875rem)",
     whiteSpace: "nowrap",
   },
   variants: {

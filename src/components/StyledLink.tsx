@@ -4,11 +4,10 @@ import React from "react";
 import { buttonRecipe } from "styled-system/recipes";
 import { css, cx } from "styled-system/css";
 import {
-  useFontSizeProfile,
   useLinkComponent,
+  useResolvedFontSize,
   useResolvedVariant,
 } from "../config/style-config";
-import { fontSizeMap, resolveFontSizeKey } from "../config/font-size";
 import { ALL_VARIANTS } from "../config/types";
 import type { FontSizeKey } from "../config/types";
 
@@ -206,8 +205,6 @@ export const StyledLink = React.forwardRef<HTMLAnchorElement, StyledLinkProps>(
   ) {
     const HostLink = useLinkComponent();
     const resolved = useResolvedVariant(variant ?? "link", LINK_VARIANTS);
-    const profile = useFontSizeProfile();
-
     /*
      * `presentation` wins; `standalone` is the deprecated spelling of
      * `control`. Resolved in one place so there is no call site where the two
@@ -228,9 +225,7 @@ export const StyledLink = React.forwardRef<HTMLAnchorElement, StyledLinkProps>(
      * control keeps its 48px at the smallest profile, and grows past it at the
      * largest.
      */
-    const fontSize =
-      fontSizeMap[resolveFontSizeKey({ size, fixedSize, profile })] ??
-      fontSizeMap.md;
+    const fontSize = useResolvedFontSize({ size, fixedSize });
 
     // The variant still comes from `buttonRecipe`, so colour, underline and
     // hover stay one definition shared with every other control. Only the BOX

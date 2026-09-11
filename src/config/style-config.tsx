@@ -6,6 +6,7 @@ import { resolveDensityStep, type DensityBase, type DensityStep } from "./densit
 import { THEME_VARIANTS } from "./types";
 import { IntentIconProvider, type IntentIcons } from "./intent-icons";
 import { DefaultLinkComponent, type LinkComponent } from "./link-component";
+import { fontSizeMap, resolveFontSizeKey } from "./font-size";
 
 /**
  * Everything this component library needs to know about the host application.
@@ -216,6 +217,35 @@ export function useStyleConfig(): StyleConfig {
 /** The user's app-wide font-size profile. */
 export function useFontSizeProfile(): FontSizeProfile {
   return useStyleConfig().fontSizeProfile;
+}
+
+/**
+ * The CSS `font-size` a component should render at, resolved against the
+ * reader's profile.
+ *
+ * The three lines `StyledText` and `StyledLink` each wrote for themselves, in
+ * one place, because five more components now need exactly the same answer
+ * (NEH-1561). Duplicating it six times is how one of them ends up resolving
+ * `fixedSize` differently from the rest and nothing notices — the offsets agree
+ * at `md` by construction, so a divergence is invisible at the default profile
+ * and only appears for the readers this whole mechanism exists to serve.
+ *
+ * `size` is a step RELATIVE to the profile, not an absolute key; see
+ * `resolveFontSizeKey`. The return value is a `var(--font-sizes-*, …)`
+ * reference, so it rides the host's own ramp.
+ *
+ * It is a hook rather than a function taking a profile because every caller
+ * wants the reader's profile — and a caller that passed one explicitly would be
+ * re-introducing the absolute sizing this replaced.
+ */
+export function useResolvedFontSize(options: {
+  size?: string | undefined;
+  fixedSize?: boolean | undefined;
+  extraSteps?: number | undefined;
+}): string {
+  const profile = useFontSizeProfile();
+  const key = resolveFontSizeKey({ ...options, profile });
+  return fontSizeMap[key] ?? fontSizeMap.md ?? "1rem";
 }
 
 /** The app-wide default icon size. `StyledIcon` uses it when given no `size`. */

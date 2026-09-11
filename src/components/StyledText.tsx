@@ -5,8 +5,8 @@ import React from "react";
 import { styled } from "styled-system/jsx";
 import { css, cx } from "styled-system/css";
 import StyledTooltip from "./StyledTooltip";
-import { useFontSizeProfile } from "../config/style-config";
-import { fontSizeMap, resolveFontSizeKey } from "../config/font-size";
+import { useResolvedFontSize } from "../config/style-config";
+import type { fontSizeMap } from "../config/font-size";
 import type { AllowedTextVariant } from "../config/types";
 import { textRecipe } from "styled-system/recipes";
 
@@ -126,15 +126,9 @@ const StyledText = React.forwardRef<HTMLSpanElement, StyledTextProps>((props, re
     block: _block,
     ...rest
   } = props;
-  const fontSizeProfile = useFontSizeProfile();
-
-  const finalSize = resolveFontSizeKey({
-    size,
-    fixedSize,
-    profile: fontSizeProfile,
-    extraSteps: sizeStep,
-  });
-  const fontSize = fontSizeMap[finalSize] || fontSizeMap.md;
+  // The shared resolver, not three lines of its own: seven components now ask
+  // this same question and they must all get the same answer (NEH-1561).
+  const fontSize = useResolvedFontSize({ size, fixedSize, extraSteps: sizeStep });
 
   const extraStyles: React.CSSProperties = {};
   // Before `ellipsis`, which sets its own `display: block` and must keep

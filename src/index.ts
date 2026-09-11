@@ -43,8 +43,11 @@ export type { HopperStyleProviderProps } from "./config/style-config";
 export { setStyleLogger } from "./config/logger";
 export type { StyleLogger } from "./config/logger";
 
+export { useResolvedFontSize } from "./config/style-config";
+
 export {
   fontSizeMap,
+  resolveFontSizeKey,
   getFontSizeLabel,
   getFontSizeValue,
   stepUpFontSize,

@@ -5,6 +5,8 @@ import { styled } from "styled-system/jsx";
 import { log } from "../config/logger";
 import StyledBox from "./StyledBox";
 import StyledScrollbar from "./StyledScrollbar";
+import { useResolvedFontSize } from "../config/style-config";
+import type { FontSizeKey } from "../config/types";
 
 /**
  * A data table that renders real table elements.
@@ -35,13 +37,40 @@ const PandaTableRoot = styled("table", {
     verticalAlign: "top",
     // Digits share a column width, so numeric cells line up down the table.
     fontVariantNumeric: "lining-nums tabular-nums",
-    // MEASURED off the originating Chakra build with getComputedStyle, not
-    // derived from tokens: font 14px / line-height 20px, cells 12px on every
-    // side, a 1px rule under each cell. Reasoning from the token scale instead
-    // (fontSize md, py 2) put the table 51px too tall — the font, not the
-    // padding, drove the difference.
-    fontSize: "14px",
-    lineHeight: "20px",
+    /**
+     * MEASURED off the originating Chakra build with getComputedStyle, not
+     * derived from tokens: font 14px / line-height 20px, cells 12px on every
+     * side, a 1px rule under each cell. Reasoning from the token scale instead
+     * (fontSize md, py 2) put the table 51px too tall — the font, not the
+     * padding, drove the difference.
+     *
+     * ## The measurement stands; the hardcoded px does not (NEH-1561)
+     *
+     * `fontSize: "14px"` was a **px literal**, which this repo forbids outright
+     * — "never a hardcoded px font size — the scale is rem-based so it honours
+     * the browser's own font setting, which is the affordance users with low
+     * vision actually reach for" (CLAUDE.md, "Adding or changing a component",
+     * rule 3). It ignored the browser's setting AND the reader's profile: a
+     * table rendered 14px at all five profiles on both ramps.
+     *
+     * That is the worst of the five components to freeze. A table is where this
+     * product puts vitals, medication lists and schedules — dense rows of small
+     * text, read by the people the type scale exists for, at the one size the
+     * setting could not reach.
+     *
+     * **The Chakra baseline is preserved exactly, and by arithmetic rather than
+     * by luck.** `StyledTable` defaults `textSize` to `sm`, one step below body,
+     * which at `profile="md"` on this package's ramp resolves to `0.875rem` =
+     * **14px**; `1.4286` × 14 = **20.0px**, the measured line height. So the
+     * pin was never needed to hold the baseline — only to hold it still.
+     *
+     * These two are the static fallback for a bare `PandaTableRoot`;
+     * `StyledTable` overrides the font size inline with the resolved step. The
+     * line height is unitless deliberately, so it tracks whatever that is
+     * instead of needing its own resolution.
+     */
+    fontSize: "var(--font-sizes-sm, 0.875rem)",
+    lineHeight: "1.4286",
   },
   variants: {
     /**
@@ -103,10 +132,41 @@ const PandaTableColumnHeader = styled("th", {
 const PandaTableCell = styled("td", { base: { ...CELL_RULE } });
 const PandaTableCaption = styled("caption");
 
-export type StyledTableProps = React.ComponentProps<typeof PandaTableRoot>;
+export type StyledTableProps = React.ComponentProps<typeof PandaTableRoot> & {
+  /**
+   * Which step of the text scale the table's cells read at.
+   *
+   * **Relative, exactly as `size` is on `StyledText`** — `textSize="md"` is
+   * body size, the default `sm` is one step below it. See the note on
+   * `PandaTableRoot`'s base for why the 14px it replaces had to go.
+   *
+   * It is `textSize` and not `size` for one unglamorous reason: `size` is
+   * already taken on this component, by the Chakra-inherited variant that sets
+   * cell PADDING (`sm`/`md`/`lg`). Two different meanings under one name on one
+   * element is how a call site ends up changing the thing it did not mean to,
+   * so the new prop takes the longer name rather than the old one being
+   * repurposed underneath existing callers.
+   */
+  textSize?: FontSizeKey;
+  /** Pin to the `md` step rather than following the reader's profile. */
+  fixedSize?: boolean;
+};
 
-const StyledTable: React.FC<StyledTableProps> = ({ children, ...props }) => {
+const StyledTable: React.FC<StyledTableProps> = ({
+  children,
+  textSize = "sm",
+  fixedSize,
+  style,
+  ...props
+}) => {
   log.trace("StyledTable rendered");
+  /*
+   * A `styled()` base is static CSS and cannot read a React context, so the
+   * relative size is resolved here and applied inline. The cells inherit it,
+   * and `line-height` is unitless on the base, so one declaration moves the
+   * whole table in proportion.
+   */
+  const fontSize = useResolvedFontSize({ size: textSize, fixedSize });
   return (
     // `overflow: hidden` on the outer box clips the scroll container's corners
     // to the box radius; the scrollbar inside is what actually scrolls.
@@ -118,7 +178,12 @@ const StyledTable: React.FC<StyledTableProps> = ({ children, ...props }) => {
       px={0}
     >
       <StyledScrollbar p={0} data-testid="styled-table-scrollbar" border={0}>
-        <PandaTableRoot {...props} data-testid="styled-table-root">
+        <PandaTableRoot
+          {...props}
+          // A caller's own `style` spreads after ours, so it still wins outright.
+          style={{ fontSize, ...style }}
+          data-testid="styled-table-root"
+        >
           {children}
         </PandaTableRoot>
       </StyledScrollbar>
