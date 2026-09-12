@@ -327,6 +327,13 @@ export type {
 } from "./components/StyledDefinitionList";
 export { DL_VARIANTS } from "./components/StyledDefinitionList";
 
+export { default as StyledLabeledValue } from "./components/StyledLabeledValue";
+export type {
+  StyledLabeledValueProps,
+  LabeledValueLayout,
+} from "./components/StyledLabeledValue";
+export { LABELED_VALUE_LAYOUTS } from "./components/StyledLabeledValue";
+
 export { default as StyledSparkLine } from "./components/StyledSparkLine";
 export type { StyledSparkLineProps } from "./components/StyledSparkLine";
 
