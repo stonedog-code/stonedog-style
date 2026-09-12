@@ -914,6 +914,24 @@ measures two bounding boxes in a real browser. That test was verified by
 disabling the promotion and watching 4 of 12 fail — a layout guard nobody has
 seen fail is not yet a guard.
 
+## `StyledLabeledValue` makes the run-on unwritable, not merely fixable (NEH-1558, 0.28.0)
+
+Block promotion is keyed on props, so it cannot fire at a call site that
+passes none — which is every call site that shipped the run-on. So
+`StyledLabeledValue` takes `label` and `value` as **props** and renders a
+`<dl>`/`<dt>`/`<dd>`: the caller never writes the boundary and cannot omit it.
+It is also the only fix for the audible half — two `block` spans are still
+announced as one string; a term and its definition are not.
+
+It does not reuse `StyledDefinitionList.Root`, which is a bordered, padded
+panel; a labeled value lives inside a surface that already exists.
+
+**The lint rule for the raw shape lives in the consumer, not here.**
+HopperGuard's `scripts/check-adjacent-text.ts` resolves the parent chain across
+that app's own files, which a rule in this package cannot see. This package's
+share is the jsdom detector in `test/run-on.ts`, proved against the plant
+taken from a real shipped call site (`StyledLabeledValue.test.tsx`).
+
 ## A wrapper between a prop and the element it describes (NEH-1475)
 
 The section above says a component must not accept a prop it cannot honour.
