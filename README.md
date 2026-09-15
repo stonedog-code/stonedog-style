@@ -874,7 +874,7 @@ app adopts it.
 
 ```bash
 npm install       # also runs panda codegen
-npm run gate      # codegen → typecheck → lint → tests. The merge bar.
+npm run gate      # codegen → typecheck → lint → jest → component tests (needs `npx playwright install chromium`). The merge bar.
 npm test
 ```
 

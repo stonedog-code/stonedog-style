@@ -150,7 +150,9 @@ npm ci
 echo "  node_modules now matches package-lock.json"
 
 # ---------------------------------------------------------------------------
-# 4. The gate: codegen, typecheck, lint, unit tier.
+# 4. The gate: codegen, typecheck, lint, unit tier, then the component tier at
+#    four viewports (which needs `npx playwright install chromium` on this
+#    machine — it fails naming that command rather than skipping).
 #
 # Publishing is irreversible on a version number, so the gate runs here rather
 # than being assumed from a green PR — this checkout may carry commits that

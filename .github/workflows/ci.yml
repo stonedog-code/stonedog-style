@@ -39,7 +39,13 @@ jobs:
       # codegen -> typecheck -> lint -> jest. Panda's generated `styled-system`
       # is gitignored, so codegen has to run before anything type-checks; the
       # `pre*` scripts in package.json handle that.
-      - run: npm run gate
+      #
+      # This is HALF of `npm run gate`. The other half, gate:ct, is the
+      # `component` job below; together the two jobs are exactly what a local
+      # `npm run gate` runs (NEH-1317). They are split here only because the
+      # component half pays for a browser download and is pointless on code
+      # that does not compile.
+      - run: npm run gate:unit
 
   component:
     name: Component tests (4 viewports)
@@ -66,7 +72,11 @@ jobs:
       # Runs every *.ct.tsx four times — 375, 768, 1280, 1920. These are the
       # widths where layout breaks, not popular phones. This is the tier that
       # answers what jsdom cannot: pixels, overflow, and 44x44 targets.
-      - run: npm run test:ct
+      #
+      # gate:ct rather than test:ct: the same Playwright run, plus the guards a
+      # gate needs — it prints the files/tests/viewports it examined, refuses an
+      # empty set, and fails if the passed count does not match the listed one.
+      - run: npm run gate:ct
 
       - uses: actions/upload-artifact@v4
         # Only useful when something failed, and the trace is what makes a
