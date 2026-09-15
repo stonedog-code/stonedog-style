@@ -455,17 +455,21 @@ Two things follow for anyone changing `files`:
 | | `npm test` (jest + jsdom) | `npm run test:ct` (Playwright) |
 |---|---|---|
 | **Answers** | props, wiring, ARIA, callbacks, variant resolution | computed styles, layout, overflow, tap targets |
-| **Speed** | ~1s, run on every save | ~5s, run before pushing |
-| **In the gate?** | yes | no — see below |
+| **Speed** | ~1s, run on every save | ~1 min for 1360 tests at four viewports |
+| **In the gate?** | yes (`gate:unit`) | yes (`gate:ct`, since NEH-1317) |
 
 **jsdom has no layout engine.** Every element reports a zero-sized box, so it
 will agree that a 400px panel fits a 375px screen. Anything about *pixels* is
 unanswerable there, which is why the second tier exists — and why neither
 replaces the other.
 
-`npm run gate` runs codegen → typecheck → lint → jest, and is the merge bar.
-Component tests are a separate command because they need a browser download; run
-them for anything touching layout, sizing or a recipe.
+`npm run gate` runs codegen → typecheck → lint → jest (`gate:unit`) and then the
+component tests at all four viewports (`gate:ct`, `scripts/gate-ct.sh`) — the
+same two lanes CI requires — and is the merge bar. The component lane prints the
+files, tests and viewports it examined, clears `playwright/.cache` so it cannot
+measure a stale bundle, and **fails loudly naming `npx playwright install
+chromium` when the browser is missing** rather than skipping: until NEH-1317 the
+gate stopped at jest, so a green said nothing about rendering.
 
 ### Component tests run at four viewports
 
