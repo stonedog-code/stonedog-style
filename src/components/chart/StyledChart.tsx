@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import StyledBox from "../StyledBox";
 import { ChartDataTable } from "./ChartDataTable";
+import { useResolvedFontSize } from "../../config/style-config";
 import { ChartEmpty, ChartFrame, ChartSingleReading } from "./ChartFrame";
 import { ChartLegend } from "./ChartLegend";
 import { ChartRangeControl } from "./ChartRangeControl";
@@ -165,6 +166,12 @@ export const StyledChart: React.FC<StyledChartProps> = ({
   legendVariant = "line",
   "data-testid": testId,
 }) => {
+  /**
+   * The fullscreen control's label size, resolved against the reader's profile
+   * rather than pinned to a tier (NEH-1645). See `FULLSCREEN_BUTTON_STYLE` for
+   * why it cannot live beside the rest of that button's appearance.
+   */
+  const controlFontSize = useResolvedFontSize({ size: "md" });
   const instanceId = useId().replace(/:/g, "");
   const resolved = resolveSeries(series, instanceId);
   const [activeRange, chooseRange] = useSeededRange(range, onRangeChange);
@@ -314,7 +321,7 @@ export const StyledChart: React.FC<StyledChartProps> = ({
                 type="button"
                 data-testid="chart-fullscreen-open"
                 onClick={() => setFullscreen(true)}
-                style={FULLSCREEN_BUTTON_STYLE}
+                style={{ ...FULLSCREEN_BUTTON_STYLE, fontSize: controlFontSize }}
               >
                 {/*
                   * A visible word, not an icon alone. Every control in this
@@ -417,7 +424,7 @@ export const StyledChart: React.FC<StyledChartProps> = ({
             type="button"
             data-testid="chart-fullscreen-close"
             onClick={close}
-            style={FULLSCREEN_BUTTON_STYLE}
+            style={{ ...FULLSCREEN_BUTTON_STYLE, fontSize: controlFontSize }}
           >
             Exit full screen
           </button>
@@ -440,7 +447,17 @@ const FULLSCREEN_BUTTON_STYLE: React.CSSProperties = {
   minHeight: "max(48px, var(--stonedog-chart-control-size, 48px))",
   minWidth: "max(48px, var(--stonedog-chart-control-size, 48px))",
   paddingInline: "0.75rem",
-  fontSize: "var(--font-sizes-md, 1rem)",
+  /*
+   * NO `fontSize` HERE, deliberately (NEH-1645).
+   *
+   * It used to read `var(--font-sizes-md, 1rem)`, which looks like the house
+   * mechanism and is inert: the thirteen `--font-sizes-*` properties are
+   * declared once at `:root` with static values, so naming a tier pins this
+   * button at that tier for every profile. Following the reader needs
+   * `useResolvedFontSize`, and a hook cannot be called from a module-level
+   * constant — so the size is applied at each use site, where the component
+   * can call it. The rest of the button's appearance stays shared here.
+   */
   borderWidth: 1,
   borderStyle: "solid",
   borderColor: CHART_GRID_VAR,
