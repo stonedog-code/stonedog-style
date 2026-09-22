@@ -31,6 +31,9 @@
  * host forgot to define the palette" from a visible fault into a silent one.
  */
 
+import { useFontSizeProfile } from "../../config/style-config";
+import { getFontSizeValue, resolveFontSizeKey } from "../../config/font-size";
+
 /** How many categorical slots the palette defines. */
 export const CHART_SERIES_SLOTS = 8;
 
@@ -90,6 +93,52 @@ export const CHART_SURFACE_VAR = chartVar("surface");
  * the reader has to decode — 13-14px. 14 it is.
  */
 export const CHART_AXIS_FONT_SIZE = 14;
+
+/**
+ * The axis tick size for the reader's own font-size profile, in **px**
+ * (NEH-1645).
+ *
+ * ## Why a number, and not the `var()` every other size in this package is
+ *
+ * Axis ticks are SVG `<text>`, and the charting library hands this value to
+ * that element as a **presentation attribute**. A custom property is not
+ * resolved in that position — `font-size="var(--font-sizes-md)"` is discarded,
+ * silently, leaving the UA default. So this is the case `getFontSizeValue`
+ * exists for: "a context that cannot resolve custom properties". It returns a
+ * real length, and this returns the px number the attribute can actually use.
+ *
+ * ## Why it was frozen before
+ *
+ * `CHART_AXIS_FONT_SIZE` is a literal, so every axis tick in every consumer sat
+ * at 14px at every profile — a reader who had set their text larger got larger
+ * body copy and the same small axis numbers beside it. That is the shape this
+ * package has now corrected three times (0.26.0 text, 0.27.0 controls, this).
+ *
+ * ## The floor is kept, because it was a considered floor
+ *
+ * 14px is not a default that happened; the constant's own docblock argues it
+ * up from a 12px reference for an audience of seniors and adults with
+ * cognitive disabilities. So the profile may only make the ticks **larger**.
+ *
+ * At `fontSizeProfile="md"` this returns exactly **14** — `sm` resolves to
+ * `0.875rem` — so a consumer on the default profile is byte-identical and only
+ * the non-default profiles this setting exists for move.
+ */
+export function useChartAxisFontSize(): number {
+  const profile = useFontSizeProfile();
+  const key = resolveFontSizeKey({ size: "sm", profile });
+  const rem = Number.parseFloat(getFontSizeValue(key));
+  if (!Number.isFinite(rem)) return CHART_AXIS_FONT_SIZE;
+  return Math.max(CHART_AXIS_FONT_SIZE, Math.round(rem * ROOT_FONT_SIZE_PX));
+}
+
+/**
+ * The document's root font size, which this package does not move and hosts are
+ * told not to: the profile works by naming a different KEY, never by re-valuing
+ * a key. Converting rem → px for the SVG attribute above needs a number, and
+ * this is the one the browser would have used.
+ */
+const ROOT_FONT_SIZE_PX = 16;
 
 /**
  * Per-slot dash patterns for line and area marks.

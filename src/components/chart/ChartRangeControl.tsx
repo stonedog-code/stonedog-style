@@ -3,6 +3,7 @@
 import React from "react";
 import StyledBox from "../StyledBox";
 import { SR_ONLY } from "./sr-only";
+import { useResolvedFontSize } from "../../config/style-config";
 import {
   CHART_RANGES,
   CHART_RANGE_LABELS,
@@ -77,7 +78,24 @@ export const ChartRangeControl: React.FC<ChartRangeControlProps> = ({
   ranges = CHART_RANGES,
   label,
   "data-testid": testId = "chart-range-control",
-}) => (
+}) => {
+  /**
+   * The reader's own size, NOT a static `--font-sizes-md` reference
+   * (NEH-1645).
+   *
+   * The literal this replaced looked like the house mechanism and was inert:
+   * the thirteen `--font-sizes-*` properties are declared once at `:root` with
+   * static values, so naming a tier pins the label at that tier for every
+   * profile. The hook picks the KEY the profile asks for; the `var()` it
+   * returns is still what Panda's literal-only extraction needs to see.
+   *
+   * Byte-identical at `fontSizeProfile="md"` — `md` resolves to the `md` key —
+   * so a consumer on the default profile renders unchanged, and only the
+   * non-default profiles this setting exists for move.
+   */
+  const labelFontSize = useResolvedFontSize({ size: "md" });
+
+  return (
   <StyledBox
     role="group"
     aria-label={label}
@@ -103,7 +121,7 @@ export const ChartRangeControl: React.FC<ChartRangeControlProps> = ({
             paddingInline: "0.75rem",
             // The host's own text scale, with a literal that keeps the button
             // legible if the property is undefined.
-            fontSize: "var(--font-sizes-md, 1rem)",
+            fontSize: labelFontSize,
             fontWeight: active ? 700 : 400,
             borderStyle: "solid",
             borderWidth: 0,
@@ -121,5 +139,6 @@ export const ChartRangeControl: React.FC<ChartRangeControlProps> = ({
     })}
   </StyledBox>
 );
+};
 
 export default ChartRangeControl;

@@ -3,6 +3,7 @@
 import React from "react";
 import { SR_ONLY } from "./sr-only";
 import { CHART_AXIS_TEXT_VAR, CHART_GRID_VAR, CHART_SURFACE_VAR } from "./chart-palette";
+import { useResolvedFontSize } from "../../config/style-config";
 import {
   buildChartTable,
   chartTableScrolls,
@@ -76,6 +77,20 @@ export const ChartDataTable: React.FC<ChartDataTableProps> = ({
   maxHeight = "18rem",
   "data-testid": testId = "chart-data-table",
 }) => {
+  /**
+   * One step below the reader's own profile — NOT a static `--font-sizes-sm`
+   * reference (NEH-1645).
+   *
+   * Naming a tier in an inline style looks exactly like following the reader
+   * and does the opposite: the thirteen `--font-sizes-*` custom properties are
+   * declared once at `:root` with static values, so a literal
+   * `var(--font-sizes-sm, …)` pins this text at `sm` for every profile,
+   * forever. The profile changes which KEY a component asks for, never what a
+   * key is worth — so the hook is the half that follows the reader, and the
+   * `var()` it returns is the half that survives Panda's literal-only
+   * extraction. Both halves are required; this used to have only the second.
+   */
+  const tableFontSize = useResolvedFontSize({ size: "sm" });
   const model: ChartTableModel = buildChartTable({
     data,
     series,
@@ -147,7 +162,7 @@ export const ChartDataTable: React.FC<ChartDataTableProps> = ({
           // Digits share a column width, so numeric cells line up down the
           // table. The single most useful thing a table of readings can do.
           fontVariantNumeric: "lining-nums tabular-nums",
-          fontSize: "var(--font-sizes-sm, 0.9375rem)",
+          fontSize: tableFontSize,
           color: CHART_AXIS_TEXT_VAR,
         }}
       >
@@ -156,7 +171,7 @@ export const ChartDataTable: React.FC<ChartDataTableProps> = ({
             captionSide: "top",
             textAlign: "start",
             padding: "0.5rem 0.75rem",
-            fontSize: "var(--font-sizes-sm, 0.9375rem)",
+            fontSize: tableFontSize,
           }}
         >
           {caption}

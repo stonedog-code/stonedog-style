@@ -40,6 +40,7 @@ export type { ChartRangeKey } from "./chart-range";
 
 export {
   CHART_AXIS_FONT_SIZE,
+  useChartAxisFontSize,
   CHART_AXIS_TEXT_VAR,
   CHART_CURSOR_VAR,
   CHART_GRID_VAR,
