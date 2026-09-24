@@ -199,6 +199,105 @@ export function getFontSizeValue(size: string): string {
   return sizeString;
 }
 
+/**
+ * What each size key is WORTH in the host document — the host's numbers
+ * (NEH-1677).
+ *
+ * ## This package owns the KEYS. The host owns the NUMBERS
+ *
+ * The same split `z-layers.ts` makes for stacking order, for the same reason.
+ * Every `fontSizeMap` entry is `var(--font-sizes-KEY, <fallback>)`, so on the
+ * CSS side a host retunes the scale by defining the custom properties and this
+ * package never needs to know. But a handful of places need a **number**
+ * rather than a CSS reference — an SVG presentation attribute discards a
+ * `var()` — and JS cannot see a custom property. Until this existed those
+ * places converted against the package's own *fallbacks* and a hardcoded 16px
+ * root, which is the ramp a host gets for saying nothing and not the ramp a
+ * host that overrides the properties actually renders.
+ *
+ * Measured on HopperGuard, which pins `--font-sizes-md: 1.375rem` and twelve
+ * more: chart axis ticks reached **18px beside 32px body text** at the largest
+ * profile, because the conversion read `1.25rem` where the host's `xl` step
+ * was `2rem`. The direction was right and the magnitude was the package's.
+ *
+ * So a host supplies the same thirteen values here that it declares in CSS,
+ * and every px conversion in this package reads them. It is a static object,
+ * not a measurement: no element is probed, nothing runs in an effect, and the
+ * server renders the same number the client does.
+ *
+ * ## A host that sets nothing renders exactly as before
+ *
+ * `DEFAULT_FONT_SIZE_SCALE` names no ramp, so `fontSizePx` falls through to
+ * the fallback half of `fontSizeMap`, at 16px per rem — byte-for-byte the
+ * arithmetic that was here before. Both Optima products run the package's
+ * ramp and are unaffected either way. The cost, stated plainly: a host that
+ * overrides `--font-sizes-*` and does not set this field gets today's
+ * under-reading, silently. HopperGuard's own test asserts its CSS and its
+ * `fontSizeScale` agree, which is the guard that makes the next drift visible.
+ */
+export interface FontSizeScale {
+  /**
+   * Pixels per `rem` in the host document — the root element's font-size.
+   * `16` unless the host sets `html { font-size }`, which this package tells
+   * hosts not to do: the profile works by naming a different KEY, never by
+   * re-valuing the root.
+   */
+  rootPx: number;
+  /**
+   * Key → length, exactly as the host declares `--font-sizes-KEY`. A string is
+   * a CSS length in `rem` or `px` (`"1.375rem"`, `"22px"`); a number is px.
+   * `Partial` so a host may name only the tiers it overrides, but a host that
+   * pins its scale in CSS should name all thirteen — a key missing here reads
+   * the package's fallback, which is the mismatch this field exists to remove.
+   */
+  ramp: Partial<Record<FontSizeKey, string | number>>;
+}
+
+/**
+ * The document's root font size this package assumes when a host names none.
+ * Converting rem → px for an SVG attribute needs a number, and this is the one
+ * the browser uses for a document that leaves `html { font-size }` alone.
+ */
+export const ROOT_FONT_SIZE_PX = 16;
+
+/**
+ * What a host that supplies nothing gets: the package's own fallbacks at 16px
+ * per rem. An empty `ramp` rather than a copy of the thirteen fallbacks, so
+ * there is exactly one place those values live.
+ */
+export const DEFAULT_FONT_SIZE_SCALE: FontSizeScale = {
+  rootPx: ROOT_FONT_SIZE_PX,
+  ramp: {},
+};
+
+/**
+ * A size key as a px NUMBER, for the contexts that cannot resolve a `var()`.
+ *
+ * Resolves the key against the host's `ramp` first and the package's static
+ * fallback second, then converts: a number is already px, a `px` string is
+ * read as is, a `rem` string is multiplied by `rootPx`. Anything else — an
+ * unknown key, a unit this does not understand, an unparseable value —
+ * returns `undefined` rather than throwing or guessing, because this feeds
+ * rendering code and the caller has a floor to fall back on.
+ *
+ * Pure, and SSR-safe: it reads two objects and does arithmetic.
+ */
+export function fontSizePx(
+  key: string,
+  scale: FontSizeScale = DEFAULT_FONT_SIZE_SCALE,
+): number | undefined {
+  const entry = scale.ramp[key as FontSizeKey] ?? getFontSizeValue(key);
+  if (typeof entry === "number") {
+    return Number.isFinite(entry) ? entry : undefined;
+  }
+  const value = Number.parseFloat(entry);
+  if (!Number.isFinite(value)) return undefined;
+  const unit = entry.trim().replace(/^[\d.+-]+/, "").toLowerCase();
+  if (unit === "rem") return value * scale.rootPx;
+  if (unit === "px") return value;
+  return undefined;
+}
+
 /** Order used to step a heading one tier above its base size. */
 export const FONT_SIZE_ORDER: readonly FontSizeKey[] = [
   "xs",

@@ -327,6 +327,30 @@ forking anything:
 }
 ```
 
+**If you define those properties, tell the provider the same numbers
+(0.30.0).** Nearly everything reads the scale through CSS and needs nothing
+more. A few places need a **number** — the chart axis ticks are SVG `<text>`,
+and an SVG presentation attribute cannot resolve a `var()` — so
+`useChartAxisFontSize` converts a key to px in JS, where your custom
+properties are out of reach. Without this it converts against the package's
+fallbacks at 16px per rem, and on a larger ramp the ticks end up well below
+the body text beside them:
+
+```tsx
+// One module-level constant — the same thirteen values your CSS declares.
+export const FONT_SIZE_SCALE: FontSizeScale = {
+  rootPx: 16,                      // your document's root font-size
+  ramp: { xs: "0.75rem", sm: "1.0625rem", md: "1.375rem", /* … */ "9xl": "4.5rem" },
+};
+
+<StonedogStyleProvider fontSizeScale={FONT_SIZE_SCALE}>
+```
+
+A `ramp` entry is a `rem` or `px` string, or a px number. A host that sets
+nothing gets the package's fallbacks at 16px per rem — exactly what it got
+before the field existed. Keep the constant and the CSS in one test: a scale
+named in two places is a scale that drifts, and this one drifts silently.
+
 **Set the icon size once, at the provider.** Naming a `size` at each call site
 works, but it opts that icon out of ever being retuned — which is how an
 application ends up with three icon scales and no single place to fix them.

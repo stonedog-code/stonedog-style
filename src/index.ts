@@ -19,6 +19,7 @@ export {
   StonedogStyleProvider,
   useStyleConfig,
   useFontSizeProfile,
+  useFontSizeScale,
   useIconSize,
   useLinkComponent,
   useResolvedVariant,
@@ -53,8 +54,12 @@ export {
   stepUpFontSize,
   stepDownFontSize,
   offsetFontSize,
+  fontSizePx,
   FONT_SIZE_ORDER,
+  ROOT_FONT_SIZE_PX,
+  DEFAULT_FONT_SIZE_SCALE,
 } from "./config/font-size";
+export type { FontSizeScale } from "./config/font-size";
 
 export {
   THEME_VARIANTS,

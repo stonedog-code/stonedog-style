@@ -31,8 +31,8 @@
  * host forgot to define the palette" from a visible fault into a silent one.
  */
 
-import { useFontSizeProfile } from "../../config/style-config";
-import { getFontSizeValue, resolveFontSizeKey } from "../../config/font-size";
+import { useStyleConfig } from "../../config/style-config";
+import { fontSizePx, resolveFontSizeKey } from "../../config/font-size";
 
 /** How many categorical slots the palette defines. */
 export const CHART_SERIES_SLOTS = 8;
@@ -120,25 +120,33 @@ export const CHART_AXIS_FONT_SIZE = 14;
  * up from a 12px reference for an audience of seniors and adults with
  * cognitive disabilities. So the profile may only make the ticks **larger**.
  *
- * At `fontSizeProfile="md"` this returns exactly **14** — `sm` resolves to
- * `0.875rem` — so a consumer on the default profile is byte-identical and only
- * the non-default profiles this setting exists for move.
+ * At `fontSizeProfile="md"` on the package's own ramp this returns exactly
+ * **14** — `sm` resolves to `0.875rem` — so a consumer on the default profile
+ * is byte-identical and only the non-default profiles this setting exists for
+ * move.
+ *
+ * ## The number is the HOST's, not this package's (NEH-1677)
+ *
+ * The first version converted against `fontSizeMap`'s own fallbacks at a
+ * hardcoded 16px root. That is the ramp a host gets for saying nothing — and
+ * a host that pins its own `--font-sizes-*` renders a different one, which
+ * JS cannot see. Measured on HopperGuard: the axis walked 14 → 18 while body
+ * text walked 22 → 32, so at the largest profile the ticks were 56% of the
+ * copy beside them. Every relation the test asserted held; every one of them
+ * is also true of a ramp that is too small.
+ *
+ * So the key is still resolved here, and the conversion reads
+ * `StyleConfig.fontSizeScale` — the same thirteen values the host declares in
+ * CSS, supplied once at the provider. A host that names none gets the
+ * package's fallbacks, which is the arithmetic above.
  */
 export function useChartAxisFontSize(): number {
-  const profile = useFontSizeProfile();
-  const key = resolveFontSizeKey({ size: "sm", profile });
-  const rem = Number.parseFloat(getFontSizeValue(key));
-  if (!Number.isFinite(rem)) return CHART_AXIS_FONT_SIZE;
-  return Math.max(CHART_AXIS_FONT_SIZE, Math.round(rem * ROOT_FONT_SIZE_PX));
+  const { fontSizeProfile, fontSizeScale } = useStyleConfig();
+  const key = resolveFontSizeKey({ size: "sm", profile: fontSizeProfile });
+  const px = fontSizePx(key, fontSizeScale);
+  if (px === undefined) return CHART_AXIS_FONT_SIZE;
+  return Math.max(CHART_AXIS_FONT_SIZE, Math.round(px));
 }
-
-/**
- * The document's root font size, which this package does not move and hosts are
- * told not to: the profile works by naming a different KEY, never by re-valuing
- * a key. Converting rem → px for the SVG attribute above needs a number, and
- * this is the one the browser would have used.
- */
-const ROOT_FONT_SIZE_PX = 16;
 
 /**
  * Per-slot dash patterns for line and area marks.
