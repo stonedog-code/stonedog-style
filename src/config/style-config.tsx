@@ -6,7 +6,12 @@ import { resolveDensityStep, type DensityBase, type DensityStep } from "./densit
 import { THEME_VARIANTS } from "./types";
 import { IntentIconProvider, type IntentIcons } from "./intent-icons";
 import { DefaultLinkComponent, type LinkComponent } from "./link-component";
-import { fontSizeMap, resolveFontSizeKey } from "./font-size";
+import {
+  DEFAULT_FONT_SIZE_SCALE,
+  fontSizeMap,
+  resolveFontSizeKey,
+  type FontSizeScale,
+} from "./font-size";
 
 /**
  * Everything this component library needs to know about the host application.
@@ -27,6 +32,26 @@ export interface StyleConfig {
    * all visible text.
    */
   fontSizeProfile: FontSizeProfile;
+
+  /**
+   * The **host's** type scale as numbers — what each size key is worth, for
+   * the places that need a px value rather than a `var()` (NEH-1677).
+   *
+   * `fontSizeProfile` above is the reader's STEP; this is the SCALE those
+   * steps are taken on. On the CSS side a host retunes the scale by defining
+   * `--font-sizes-*`, and nothing here needs to know. But an SVG presentation
+   * attribute cannot resolve a custom property, so `useChartAxisFontSize`
+   * hands the charting library a number — and a number computed in JS can only
+   * be right if the host has told this package its ramp. Same split as
+   * `z-layers.ts`: the package owns the names, the host owns the numbers.
+   *
+   * Defaults to the package's own fallbacks at 16px per rem, so a host that
+   * says nothing renders exactly what it rendered before this field existed.
+   * A host that overrides the custom properties supplies the same thirteen
+   * values here, as a module-level constant — a fresh object each render is
+   * a fresh context value each render.
+   */
+  fontSizeScale: FontSizeScale;
 
   /**
    * The user's app-wide appearance. A component may override it per call site;
@@ -103,6 +128,10 @@ export interface StyleConfig {
  */
 export const DEFAULT_STYLE_CONFIG: StyleConfig = {
   fontSizeProfile: "md",
+  // The package's own fallbacks at 16px per rem — the arithmetic every px
+  // conversion used before a host could name its ramp, so an unconfigured
+  // host is byte-identical (NEH-1677).
+  fontSizeScale: DEFAULT_FONT_SIZE_SCALE,
   variant: "solid",
   density: "normal",
   // `standard` + `normal` resolves to 8px, which is the fallback baked into
@@ -165,6 +194,7 @@ export interface StonedogStyleProviderProps extends OptionalStyleConfig {
 export function StonedogStyleProvider({
   children,
   fontSizeProfile,
+  fontSizeScale,
   variant,
   iconSize,
   density,
@@ -176,13 +206,22 @@ export function StonedogStyleProvider({
     () => ({
       fontSizeProfile:
         fontSizeProfile ?? DEFAULT_STYLE_CONFIG.fontSizeProfile,
+      fontSizeScale: fontSizeScale ?? DEFAULT_STYLE_CONFIG.fontSizeScale,
       variant: variant ?? DEFAULT_STYLE_CONFIG.variant,
       iconSize: iconSize ?? DEFAULT_STYLE_CONFIG.iconSize,
       density: density ?? DEFAULT_STYLE_CONFIG.density,
       densityBase: densityBase ?? DEFAULT_STYLE_CONFIG.densityBase,
       linkComponent: linkComponent ?? DEFAULT_STYLE_CONFIG.linkComponent,
     }),
-    [fontSizeProfile, variant, iconSize, density, densityBase, linkComponent],
+    [
+      fontSizeProfile,
+      fontSizeScale,
+      variant,
+      iconSize,
+      density,
+      densityBase,
+      linkComponent,
+    ],
   );
 
   return (
@@ -217,6 +256,15 @@ export function useStyleConfig(): StyleConfig {
 /** The user's app-wide font-size profile. */
 export function useFontSizeProfile(): FontSizeProfile {
   return useStyleConfig().fontSizeProfile;
+}
+
+/**
+ * The host's type scale as numbers, or the package's fallbacks if it named
+ * none. Feed it to `fontSizePx` wherever a real length is needed rather than
+ * a `var()` reference (NEH-1677).
+ */
+export function useFontSizeScale(): FontSizeScale {
+  return useStyleConfig().fontSizeScale;
 }
 
 /**

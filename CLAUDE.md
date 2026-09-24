@@ -154,6 +154,7 @@ and nothing visible until someone looks at the pixels.
 | an explicit `size` on `StyledText`/`StyledHeading`/`StyledLink` | a step RELATIVE to `fontSizeProfile` | new in **0.26.0** (NEH-1561); before it, a `size` prop **overrode the user's font-size setting entirely** |
 | `StyledLink` font size | follows the profile, like `StyledText` | new in **0.26.0** (NEH-1561); before it, this file had **no font-size logic at all** and a link took whatever it inherited |
 | `StyledButton` / `StyledIconButton` / `StyledTag` / `StyledAlert` / `StyledTable` font size | follows the profile, relative to it | new in **0.27.0** (NEH-1561); before it, **none of the five saw the reader's setting** |
+| `fontSizeScale` on `StyleConfig` | the package's fallbacks at 16px per rem | new in **0.30.0** (NEH-1677). `useChartAxisFontSize` converts a key to px against it; before it, the conversion read the package's static fallbacks and a hardcoded 16, so a host pinning a larger `--font-sizes-*` ramp (HopperGuard) got axis ticks at **18px beside 32px body text**. Unset, byte-identical to 0.29.0 |
 
 **0.27.0 finishes what 0.26.0 started, and the five components needed five
 different fixes because they were frozen five different ways.** "The recipe sets
@@ -282,6 +283,21 @@ way.
 preset breakpoints only. Any other Panda condition (`_hover`, the array syntax)
 is dropped — as it silently was before — but now with a `log.warn`. Use
 `className={css({ ... })}` for those, which Panda extracts from the call site.
+
+**`fontSizeScale` (0.30.0) is the second instance of the `z-layers.ts` split —
+the package owns the KEYS, the host owns the NUMBERS — and it exists because a
+px conversion in JS cannot see a custom property.** `fontSizePx(key, scale)` in
+`config/font-size.ts` is the one conversion; anything in this package that
+needs a real length rather than a `var()` reads it through
+`useFontSizeScale()`. It is a static object, never a measurement: no probe
+element, no effect, no corrected frame. The package's own test compares the
+hook against a ramp that DIFFERS from the fallbacks (HopperGuard's real
+thirteen tiers), because every relation the previous test asserted — identity
+at `md`, monotone, floored, numeric — is also true of a ramp that is too
+small. **The ordering rule did not bite here** because a host that sets nothing
+is byte-identical; the cost is the mirror image — a host that overrides the
+CSS and forgets the field gets the old under-reading silently, so a consumer
+asserts its CSS and its constant agree.
 
 `iconSize` is still `"2x"` because step 1 has not happened for it: ~150
 HopperGuard call sites rely on that default and the app does not set

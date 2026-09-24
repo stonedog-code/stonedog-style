@@ -2,12 +2,14 @@ import { renderHook } from "@testing-library/react";
 import React from "react";
 import {
   StonedogStyleProvider,
+  useFontSizeScale,
   useIconSize,
   useResolvedVariant,
   useStyleConfig,
   DEFAULT_STYLE_CONFIG,
   type StyleConfig,
 } from "../style-config";
+import { DEFAULT_FONT_SIZE_SCALE } from "../font-size";
 
 /** A provider wrapper preset with the given (partial) settings. */
 function withConfig(config: Partial<StyleConfig>) {
@@ -58,6 +60,34 @@ describe("useIconSize", () => {
       wrapper: withConfig({ fontSizeProfile: "xs", variant: "aurora" }),
     });
     expect(result.current).toBe(DEFAULT_STYLE_CONFIG.iconSize);
+  });
+});
+
+describe("useFontSizeScale", () => {
+  it("defaults to the package's fallbacks at 16px per rem", () => {
+    // A host that names no ramp must get the arithmetic every px conversion
+    // used before this field existed (NEH-1677).
+    const { result } = renderHook(() => useFontSizeScale());
+    expect(result.current).toBe(DEFAULT_FONT_SIZE_SCALE);
+    expect(DEFAULT_STYLE_CONFIG.fontSizeScale).toBe(DEFAULT_FONT_SIZE_SCALE);
+  });
+
+  it("returns the host's scale, by reference, when it supplies one", () => {
+    // By reference: the host passes a module-level constant and the provider
+    // must not copy or merge it, or a change to one tier would be a change to
+    // the object identity every consumer memoises on.
+    const scale = { rootPx: 16, ramp: { md: "1.375rem" } };
+    const { result } = renderHook(() => useFontSizeScale(), {
+      wrapper: withConfig({ fontSizeScale: scale }),
+    });
+    expect(result.current).toBe(scale);
+  });
+
+  it("is unaffected by the other settings", () => {
+    const { result } = renderHook(() => useFontSizeScale(), {
+      wrapper: withConfig({ fontSizeProfile: "xl", iconSize: "md" }),
+    });
+    expect(result.current).toBe(DEFAULT_FONT_SIZE_SCALE);
   });
 });
 
