@@ -9,6 +9,11 @@
  */
 
 export { default as StyledChart, StyledChart as Chart } from "./StyledChart";
+export {
+  CHART_TABLE_REGION_TESTID,
+  CHART_TABLE_TRIGGER_TESTID,
+  chartTableDisclosureName,
+} from "./StyledChart";
 export type {
   StyledChartProps,
   ChartPlotArgs,
