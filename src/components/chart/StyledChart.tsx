@@ -2,6 +2,8 @@
 
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import StyledBox from "../StyledBox";
+import StyledCollapsible from "../StyledCollapsible";
+import StyledText from "../StyledText";
 import { ChartDataTable } from "./ChartDataTable";
 import { useResolvedFontSize } from "../../config/style-config";
 import { ChartEmpty, ChartFrame, ChartSingleReading } from "./ChartFrame";
@@ -22,12 +24,13 @@ import { SR_ONLY } from "./sr-only";
  * One chart component: a plot, the same numbers as a table, a range control
  * and fullscreen (NEH-1521).
  *
- * ## The table is always there
+ * ## The table is there by default, and `"collapsible"` is the considered
+ * exception (NEH-1521, NEH-1642, NEH-1647)
  *
- * Every `StyledChart` renders its table beneath the plot — on a dashboard
- * widget as readily as in fullscreen or an export. There is no toggle and no
- * view state, which is a decision taken over a "toggle when the widget is
- * small" compromise:
+ * `showTable` defaults to `true`, and every `StyledChart` then renders its
+ * table beneath the plot — on a dashboard widget as readily as in fullscreen
+ * or an export. That default was chosen over a "toggle when the widget is
+ * small" compromise, and the reasoning is intact:
  *
  * - A toggle is a hidden state. The reader has to remember which view they are
  *   in and that the other exists, which is working memory spent on the tool
@@ -35,13 +38,27 @@ import { SR_ONLY } from "./sr-only";
  * - Always-visible satisfies "provide a text alternative" by construction,
  *   with nothing to discover.
  * - Nothing swaps, so there is no `role="tablist"`, no `aria-selected`, no
- *   `aria-controls`, no `aria-live` announcement and no focus management — and
- *   no way for the two halves to disagree about which one you are reading.
+ *   `aria-live` announcement and no focus management — and no way for the two
+ *   halves to disagree about which one you are reading.
  *
  * The cost is real: each widget roughly doubles in height. It is paid in
  * `ChartDataTable`, which scrolls its own body with a sticky header past a
  * handful of rows so that a year of daily readings cannot push the rest of the
  * page off the screen.
+ *
+ * **What that argument does not cover is EIGHT charts stacked in one widget**,
+ * where eight always-open tables is the page nobody can scroll. So the choice
+ * is per-caller rather than per-package: `showTable="collapsible"` puts the
+ * same table behind a `StyledCollapsible`, and `tableDefaultOpen` says which
+ * state it starts in. A surface the original argument was made about — one
+ * chart, one table — simply keeps the default and is unchanged.
+ *
+ * The disclosure is assembled HERE rather than by the host, so it rides inside
+ * `body` and therefore appears in the fullscreen overlay with no host wiring —
+ * and so that two products cannot word the control differently
+ * (`chartTableDisclosureName` is the one place it is spelled). Its eight
+ * accessibility criteria are asserted in
+ * `../StyledChartTableDisclosure.ct.tsx`.
  *
  * ## The plot is a seam, not a dependency
  *
@@ -68,6 +85,35 @@ import { SR_ONLY } from "./sr-only";
 
 const DEFAULT_HEIGHT = 250;
 const DEFAULT_EMPTY = "Not enough data to chart yet.";
+
+/** The collapsible table's trigger, for a host's browser tier. */
+export const CHART_TABLE_TRIGGER_TESTID = "chart-table-disclosure";
+/** The region that trigger controls, for a host's browser tier. */
+export const CHART_TABLE_REGION_TESTID = "chart-table-disclosure-region";
+
+/**
+ * What the collapsible table's control is called, everywhere.
+ *
+ * One function rather than a string at each call site: WCAG 3.2.4 Consistent
+ * Identification is that a control reads the same wherever it is met, and a
+ * wording rule kept by convention is a wording rule that drifts.
+ *
+ * `subject` is the metric or the measure — "Weight", "Adherence" — never the
+ * chart's full heading, which carries the range ("Weight — Last 7 days") and
+ * would put a date range inside a control name.
+ */
+export function chartTableDisclosureName(subject: string): string {
+  return `${subject} data table`;
+}
+
+/**
+ * The open/closed cue a sighted reader gets, since `aria-expanded` is not one.
+ *
+ * Text, not artwork: this package ships no icons at all and never will, so an
+ * indicator here has to be something a font already has. A host that wants its
+ * own glyph composes `StyledCollapsible` directly.
+ */
+const DISCLOSURE_INDICATOR = { expanded: "▾", collapsed: "▸" } as const;
 
 /** Everything the host's mark renderer needs, and nothing it has to re-derive. */
 export interface ChartPlotArgs {
@@ -127,8 +173,29 @@ export interface StyledChartProps extends BaseChartProps {
   xLabel?: string;
   /** Rows before the table body scrolls. */
   tableScrollAfterRows?: number;
-  /** Suppress the table. Reserved for a chart with no tabular reading. */
-  showTable?: boolean;
+  /**
+   * `true` (the default) renders the table under the plot; `false` suppresses
+   * it, which is reserved for a chart with no tabular reading;
+   * `"collapsible"` puts it behind a disclosure. See the component docblock
+   * for why the default is what it is and when to depart from it.
+   */
+  showTable?: boolean | "collapsible";
+  /**
+   * What the table is OF — "Weight", "Adherence" — naming the collapsible's
+   * control. Defaults to `label`, which is usually right; supply it when the
+   * accessible name is a sentence rather than a subject.
+   *
+   * Ignored unless `showTable === "collapsible"`.
+   */
+  tableSubject?: string;
+  /**
+   * The state a collapsible table starts in. Default `false`.
+   *
+   * Defaulted-and-uncontrolled: the caller says where it starts, the reader
+   * owns it thereafter. A chart that is the whole page opens it; a widget
+   * stacking several does not.
+   */
+  tableDefaultOpen?: boolean;
 
   /** Shown under a single reading, in the host's own words. */
   singleReadingHint?: string;
@@ -162,6 +229,8 @@ export const StyledChart: React.FC<StyledChartProps> = ({
   xLabel = "Date",
   tableScrollAfterRows,
   showTable = true,
+  tableSubject,
+  tableDefaultOpen = false,
   singleReadingHint,
   legendVariant = "line",
   "data-testid": testId,
@@ -176,6 +245,21 @@ export const StyledChart: React.FC<StyledChartProps> = ({
   const resolved = resolveSeries(series, instanceId);
   const [activeRange, chooseRange] = useSeededRange(range, onRangeChange);
   const [fullscreen, setFullscreen] = useState(false);
+  /*
+   * The disclosure's state is held HERE rather than left inside
+   * `StyledCollapsible`, for two reasons that both come from `body` being
+   * rendered twice while fullscreen is open — once inert behind the overlay,
+   * once in it.
+   *
+   * - The indicator has to follow the state, and `StyledCollapsible` takes
+   *   `trigger` as a fixed node without handing its state back. Uncontrolled,
+   *   the glyph could only ever be static, leaving `aria-expanded` as the sole
+   *   cue and a sighted reader with nothing — the colour-is-never-the-only-cue
+   *   rule, applied to state.
+   * - One state means the copy in the overlay opens at the same place the one
+   *   behind it was left, instead of resetting because it is a second instance.
+   */
+  const [tableOpen, setTableOpen] = useState(tableDefaultOpen);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const exitRef = useRef<HTMLButtonElement | null>(null);
 
@@ -231,6 +315,25 @@ export const StyledChart: React.FC<StyledChartProps> = ({
     if (wasFullscreen.current && !fullscreen) triggerRef.current?.focus();
     wasFullscreen.current = fullscreen;
   }, [fullscreen]);
+
+  const table = (
+    <ChartDataTable
+      data={data}
+      series={resolved}
+      xKey={xKey}
+      xLabel={xLabel}
+      caption={tableCaption ?? `${label || "Chart"} — the same readings as a table`}
+      {...(tickFormatter ? { headerFormatter: tickFormatter } : {})}
+      {...(tableScrollAfterRows !== undefined
+        ? { scrollAfterRows: tableScrollAfterRows }
+        : {})}
+    />
+  );
+
+  // `label` may deliberately be `""` — "this chart is decorative" — and an
+  // empty subject would name the control " data table". Hence `||`, not `??`.
+  const disclosureName = chartTableDisclosureName(tableSubject || label || "Chart");
+  const indicator = tableOpen ? "expanded" : "collapsed";
 
   const plotted = plottableRows(data, resolved);
   const plotHeight = fullscreen ? Math.max(height, 420) : height;
@@ -341,26 +444,56 @@ export const StyledChart: React.FC<StyledChartProps> = ({
 
       <div data-plot={plotAbsent ? "absent" : "present"}>{plot}</div>
 
-      {showTable && data.length > 0 && (
+      {showTable !== false && data.length > 0 && (
         /*
          * A plain div, not `<StyledBox mt={3}>`. StyledBox renders an inner
          * wrapper carrying `overflow: hidden` and `height: 100%`, which is
          * right for the layout cases it exists for and wrong here: it clips
          * the table's own scroll container, which is the one thing making an
          * always-present 365-row table usable.
+         *
+         * It also keeps the trigger and the region as IMMEDIATE siblings —
+         * `StyledCollapsible` renders a fragment of exactly `<button>` then
+         * `<div>` — so the next Tab after the control lands in what it just
+         * revealed rather than somewhere past it (WCAG 2.4.3).
          */
         <div style={{ marginTop: "0.75rem" }}>
-          <ChartDataTable
-            data={data}
-            series={resolved}
-            xKey={xKey}
-            xLabel={xLabel}
-            caption={tableCaption ?? `${label || "Chart"} — the same readings as a table`}
-            {...(tickFormatter ? { headerFormatter: tickFormatter } : {})}
-            {...(tableScrollAfterRows !== undefined
-              ? { scrollAfterRows: tableScrollAfterRows }
-              : {})}
-          />
+          {showTable === "collapsible" ? (
+            <StyledCollapsible
+              open={tableOpen}
+              onOpenChange={setTableOpen}
+              aria-label={disclosureName}
+              triggerTestId={CHART_TABLE_TRIGGER_TESTID}
+              contentTestId={CHART_TABLE_REGION_TESTID}
+              trigger={
+                <>
+                  {/*
+                   * `aria-hidden`, because the words beside it already say
+                   * this. An announced indicator adds a second, wordless
+                   * mention of the same control to a screen reader's list.
+                   */}
+                  <span
+                    aria-hidden="true"
+                    data-chart-table-indicator={indicator}
+                    style={{ display: "inline-flex" }}
+                  >
+                    {DISCLOSURE_INDICATOR[indicator]}
+                  </span>
+                  {/*
+                   * A `StyledText`, not a bare string. `CollapsibleTrigger` is
+                   * a raw styled `<button>`, and a `<button>` inherits no
+                   * font-size from the document — so raw text here would sit at
+                   * the UA sheet's 13.33px at every font-size profile.
+                   */}
+                  <StyledText>{disclosureName}</StyledText>
+                </>
+              }
+            >
+              {table}
+            </StyledCollapsible>
+          ) : (
+            table
+          )}
         </div>
       )}
     </>

@@ -155,6 +155,7 @@ and nothing visible until someone looks at the pixels.
 | `StyledLink` font size | follows the profile, like `StyledText` | new in **0.26.0** (NEH-1561); before it, this file had **no font-size logic at all** and a link took whatever it inherited |
 | `StyledButton` / `StyledIconButton` / `StyledTag` / `StyledAlert` / `StyledTable` font size | follows the profile, relative to it | new in **0.27.0** (NEH-1561); before it, **none of the five saw the reader's setting** |
 | `fontSizeScale` on `StyleConfig` | the package's fallbacks at 16px per rem | new in **0.30.0** (NEH-1677). `useChartAxisFontSize` converts a key to px against it; before it, the conversion read the package's static fallbacks and a hardcoded 16, so a host pinning a larger `--font-sizes-*` ramp (HopperGuard) got axis ticks at **18px beside 32px body text**. Unset, byte-identical to 0.29.0 |
+| `StyledChart showTable: true` | the table is always visible, as before | `"collapsible"` is new in **0.31.0** (NEH-1647) and is **opt-in**. The default did not move, and `StyledChartTableDisclosure.ct.tsx`'s last test is there to say so |
 
 **0.27.0 finishes what 0.26.0 started, and the five components needed five
 different fixes because they were frozen five different ways.** "The recipe sets
@@ -951,6 +952,49 @@ HopperGuard's `scripts/check-adjacent-text.ts` resolves the parent chain across
 that app's own files, which a rule in this package cannot see. This package's
 share is the jsdom detector in `test/run-on.ts`, proved against the plant
 taken from a real shipped call site (`StyledLabeledValue.test.tsx`).
+
+**The browser-tier half arrived in 0.31.0**, `StyledLabeledValue.ct.tsx`, and
+what it asserts is worth knowing before anyone "improves" it: **not
+`textContent`**, which is `"Average182.7 points"` before the fix and after it,
+because promotion separates the boxes and not the characters. It measures where
+the boxes land, what `display` they compute to, and whether a real `<dt>`/`<dd>`
+boundary exists — with the plant (two bare spans in a `StyledBox`, which really
+do weld) and the `block` control (which really do not) beside the fix, so none
+of the three is a green over a fixture that was never broken.
+
+**`StyledBox` looks like a flex parent and is not one for your children**, which
+is the fact that keeps that plant honest. `boxRecipe`'s base is `display: flex`,
+but with no layout props and no header/footer/panel/scrollbar the children still
+go through `StyledGridPanel`'s plain block `<div>`. Were it genuinely flex the
+items would be blockified and the plant would pass over nothing.
+
+## `StyledChart` grows a collapsible table (NEH-1647, 0.31.0)
+
+`showTable` becomes `boolean | "collapsible"`, with `tableSubject` naming the
+control and `tableDefaultOpen` saying where it starts. **The default is
+unchanged** — `true`, always visible — because NEH-1521's argument against a
+toggle is intact for the surface it was made about. What it does not cover is
+eight charts stacked in one dashboard widget, so the choice is per-caller.
+
+Three things about the shape:
+
+- **The disclosure is assembled in `body`**, not by the host, so it rides into
+  the fullscreen overlay with no host wiring. That is the whole reason this
+  could not stay an app-level composition.
+- **The open state is held by `StyledChart`, not by `StyledCollapsible`.**
+  `StyledCollapsible` takes `trigger` as a fixed node and does not hand its
+  state back, so an uncontrolled disclosure could only carry a static
+  indicator — leaving `aria-expanded` as the sole state cue and a sighted
+  reader with nothing. Holding it here also means the overlay's copy of `body`
+  opens where the one behind it was left.
+- **The indicator is a text glyph, not artwork.** This package ships no icons
+  and never will; a host wanting its own composes `StyledCollapsible` directly.
+
+It came from `apps/web/src/app/components/Styled/charts/chart-table-disclosure.tsx`,
+which existed only because publishing this package is 2FA-gated — a scheduling
+fact, not an architectural one. Its eight accessibility assertions were ported
+rather than re-derived, so the contract that shipped is the contract that
+survived the move.
 
 ## A wrapper between a prop and the element it describes (NEH-1475)
 
