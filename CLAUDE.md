@@ -156,6 +156,7 @@ and nothing visible until someone looks at the pixels.
 | `StyledButton` / `StyledIconButton` / `StyledTag` / `StyledAlert` / `StyledTable` font size | follows the profile, relative to it | new in **0.27.0** (NEH-1561); before it, **none of the five saw the reader's setting** |
 | `fontSizeScale` on `StyleConfig` | the package's fallbacks at 16px per rem | new in **0.30.0** (NEH-1677). `useChartAxisFontSize` converts a key to px against it; before it, the conversion read the package's static fallbacks and a hardcoded 16, so a host pinning a larger `--font-sizes-*` ramp (HopperGuard) got axis ticks at **18px beside 32px body text**. Unset, byte-identical to 0.29.0 |
 | `StyledChart showTable: true` | the table is always visible, as before | `"collapsible"` is new in **0.31.0** (NEH-1647) and is **opt-in**. The default did not move, and `StyledChartTableDisclosure.ct.tsx`'s last test is there to say so |
+| `StyledInputToggle id` | lands on the `role="switch"` **button** | changed in **0.32.0** (NEH-1720); before it, `id` went on the wrapper `<div>`, so every id-based association described a box nothing announces. `containerId` names the old placement |
 
 **0.27.0 finishes what 0.26.0 started, and the five components needed five
 different fixes because they were frozen five different ways.** "The recipe sets
@@ -995,6 +996,79 @@ which existed only because publishing this package is 2FA-gated — a scheduling
 fact, not an architectural one. Its eight accessibility assertions were ported
 rather than re-derived, so the contract that shipped is the contract that
 survived the move.
+
+## `StyledTabs`, and a switch that could be named but never described (NEH-1720, 0.32.0)
+
+Both halves were composed inside HopperGuard under NEH-1709 for the one
+sanctioned reason — publishing this package needs a 2FA one-time password, so a
+package change could not be sequenced into that release. Nothing in either was
+that product's. **Both of that work's docblocks claimed "the move is tracked in
+Linear" and no such issue existed**, which is the same defect class the rest of
+this file keeps catching one level up: a comment asserting something the world
+does not contain. NEH-1720 is both the correction and the move.
+
+**`StyledTabs` is a real tablist** — one tab stop with a roving `tabindex`,
+Left/Right wrapping at both ends, Home/End, `aria-selected` on exactly one tab,
+and `aria-controls` on **the selected tab only** because the inactive panels are
+not mounted and naming an absent id is `aria-valid-attr-value`. It wraps onto a
+second row rather than scrolling: a horizontally scrolling tablist is a WCAG
+1.4.10 reflow failure, and the tabs past the fold are not discoverable.
+
+`StyledSegmentGroup`-shaped components are **not** substitutes and the
+difference is not cosmetic. A radio group with its inputs hidden from the
+accessibility tree announces nothing a screen-reader user can operate as tabs,
+and supplies no keyboard handling at all.
+
+Three things about it are worth knowing before changing it:
+
+- **Two defects came with it from the app, and both are this file's own
+  recurring shapes.** It painted `boxBgSecondary` on hover and on the selected
+  tab while leaving the label at `color: inherit` — a surface with no stated
+  partner, legible on the one page it was built for and unverifiable anywhere
+  else; `textSecondary` is that surface's declared partner, so the pair is now
+  stated. And its tap target was 44px, WCAG 2.5.5 AAA but below the house floor
+  of 48, on a primary navigation control.
+- **The label follows the reader through `useResolvedFontSize`, exactly as
+  `StyledButton` does**, and for its two reasons: a runtime value in a Panda
+  style prop yields a class with no rule behind it, and a `<button>` inherits no
+  font size, so left alone it sits at Chromium's 13.3333px at every profile with
+  every `em` measured against it riding on that number. Note this means the file
+  does not contain the literal token `useFontSizeProfile`, so a consumer census
+  keyed on that token — HopperGuard's `check-raw-text.ts` does exactly that to
+  build `TEXT_SCALING` — does not see it, the same way it already does not see
+  `StyledButton`. That is consistent rather than a hole: a consumer treats an
+  unlisted Styled component as opaque, which exempts rather than invents.
+- **`StyledTabs.Panel` establishes no font size on purpose.** It is a labelled
+  region, not a text container, so prose inside it keeps inheriting from
+  whatever the host put there and a consumer walking ancestors for unscaled text
+  can pass straight through it. Adding a `fontSize` here would silently exempt
+  every raw string underneath from that walk.
+
+**`StyledInputToggle` could be named and not described, and the second half is
+the interesting one.** It accepted no `aria-describedby` at all — so there was
+no prop — *and* it put `id` on the wrapper `<div>`, so `StyledFieldHelp
+htmlFor={id}`, which resolves its target with `getElementById` and writes the
+attribute on whatever it finds, described a box nothing announces. Both routes
+to a description were closed at once, which is why the consumer's workaround was
+a `display: contents` wrapper plus an effect setting the attribute by query.
+
+The fix is both halves, and each earns its place:
+
+| | |
+|---|---|
+| `ariaDescribedBy` → the button | not every description is a `StyledFieldHelp`. An error summary, a character counter, or an id already in server-rendered markup has to be nameable declaratively |
+| `id` → the button | it is the element with the role, the name and the state, and *every* id-based association means the interactive element. `data-testid` had already made this exact move for this exact reason |
+
+**Moving `id` is a behaviour change at every existing call site — 43 in
+HopperGuard alone — and the ordering rule is satisfied the way 0.21.0's track
+change satisfied it, by the version number plus a name for the old behaviour.**
+A caret range on a `0.x` package does not cross a minor, so no consumer receives
+this until it widens the range deliberately; and `containerId` puts an id back
+on the wrapper for a host that genuinely wants a hook there, so nobody has to
+pin an old version to keep it. Note the two are not interchangeable and a test
+pins it: passing `id` alone must leave the wrapper with **no** id, or the
+document holds two elements claiming one id and `getElementById` answers
+whichever comes first.
 
 ## A wrapper between a prop and the element it describes (NEH-1475)
 

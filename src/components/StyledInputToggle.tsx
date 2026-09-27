@@ -48,10 +48,63 @@ import StyledTooltip from "./StyledTooltip";
  * only when it happened to be a string, so a node tooltip left the switch
  * announced as "switch" with no name at all. `label` is now explicit, with the
  * string tooltip still serving as a fallback.
+ *
+ * ## A named switch that could never be DESCRIBED
+ *
+ * The switch took no `aria-describedby` at all, and its `id` landed on the
+ * wrapper `<div>` rather than on the `role="switch"` button. Both halves of
+ * describing a control were therefore unreachable:
+ *
+ * - there was no prop for the attribute; and
+ * - `StyledFieldHelp htmlFor={id}` resolves its target with
+ *   `getElementById(htmlFor)` and writes `aria-describedby` on whatever it
+ *   finds — so it described the wrapper, which nothing announces.
+ *
+ * A consumer worked round it with a `display: contents` wrapper and an effect
+ * that set the attribute on the button by query. That is a workaround for a
+ * defect here, not a shape worth keeping, so:
+ *
+ * - **`ariaDescribedBy` is a prop**, written to the button. Wanted as well as
+ *   the fix below, because not every description is a `StyledFieldHelp`: a host
+ *   naming an error summary, a character counter, or an id rendered on the
+ *   server needs to say so declaratively rather than hope something else wires
+ *   it imperatively after hydration.
+ * - **`id` lands on the button.** It is the element with the role, the name and
+ *   the state; every use of a control's id — `aria-describedby`,
+ *   `aria-labelledby`, `aria-controls`, a label's `htmlFor`, a test selector —
+ *   means the interactive element, and pointing any of them at a layout wrapper
+ *   fails silently rather than loudly. `data-testid` already made exactly this
+ *   move for exactly this reason.
+ *
+ * **Moving `id` is a behaviour change, and the old behaviour has a name.**
+ * `containerId` puts an id back on the wrapper for a host that genuinely wants
+ * one there — a CSS hook, a layout query. That is the same escape hatch
+ * `minTrackWidth="auto"` provides for `StyledSimpleGrid`'s track change, and it
+ * is what makes the default safe to move on a minor: a caret range on a `0.x`
+ * package does not cross a minor, so no consumer receives this until it widens
+ * the range deliberately, and the one that wants the old placement can say so
+ * instead of pinning an old version.
  */
 
 export interface StyledInputToggleProps {
+  /**
+   * Written to the `role="switch"` BUTTON, not to the wrapper — see above.
+   * This is what makes `StyledFieldHelp htmlFor={id}` describe the switch.
+   */
   id?: string;
+  /**
+   * An id for the wrapper `<div>`, for a host that wants a hook on the
+   * container itself. Where `id` used to land. Rarely wanted.
+   */
+  containerId?: string;
+  /**
+   * Id(s) of the element(s) that describe the switch, written to its
+   * `aria-describedby`. Space-separated, as the attribute takes.
+   *
+   * A `StyledFieldHelp` pointed at this switch's `id` wires itself and needs
+   * nothing here; this is for the descriptions that are not one.
+   */
+  ariaDescribedBy?: string;
   value: boolean;
   onChange: (value: boolean) => void;
   /** Shown above the switch when on. */
@@ -168,6 +221,8 @@ const Handle = styled("span", {
 
 export default function StyledInputToggle({
   id,
+  containerId,
+  ariaDescribedBy,
   value,
   onChange,
   iconOn,
@@ -182,7 +237,7 @@ export default function StyledInputToggle({
   const name = label ?? (typeof tooltip === "string" ? tooltip : undefined);
 
   const content = (
-    <ToggleContainer id={id}>
+    <ToggleContainer id={containerId}>
       {hasIcons && (
         <IconContainer>
           {value ? iconOn : iconOff}
@@ -194,12 +249,21 @@ export default function StyledInputToggle({
       <SwitchButton
         type="button"
         role="switch"
+        // The caller's id lands on the BUTTON, not the container — this is the
+        // element with the role, the name and the state, and it is what every
+        // id-based association has to reach.
+        id={id}
         aria-checked={value}
         aria-label={name}
+        // Omitted rather than set to `undefined` so the attribute is absent
+        // from the DOM when there is nothing to describe: an empty
+        // `aria-describedby` is not the same as no description, and some
+        // screen readers announce the gap.
+        {...(ariaDescribedBy ? { "aria-describedby": ariaDescribedBy } : {})}
         disabled={disabled}
         data-state={value ? "on" : "off"}
-        // The caller's id lands on the BUTTON, not the container. A test that
-        // does `click(getByTestId(...))` has to hit the interactive element —
+        // The caller's test id lands on the BUTTON too. A test that does
+        // `click(getByTestId(...))` has to hit the interactive element —
         // clicking a wrapper does nothing, and the failure looks like a broken
         // component rather than a mis-aimed selector.
         data-testid={props["data-testid"] ?? "toggle-switch"}

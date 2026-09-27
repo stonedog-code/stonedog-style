@@ -124,6 +124,27 @@ export type {
 export type { StyledScrollbarProps } from "./components/StyledScrollbar";
 
 // ---------------------------------------------------------------------------
+// In-page navigation
+// ---------------------------------------------------------------------------
+/**
+ * `StyledTabs` — a real tablist: one tab stop, a roving `tabindex`, arrow keys
+ * that wrap, and `aria-controls`/`aria-labelledby` pointing at each other.
+ *
+ * Not interchangeable with a segmented radio group, which is the thing usually
+ * reached for instead: a radio group whose inputs are hidden from the
+ * accessibility tree announces nothing a screen-reader user can operate as
+ * tabs, and supplies no keyboard handling of its own.
+ */
+export { default as StyledTabs, StyledTabs as Tabs } from "./components/StyledTabs";
+export { StyledTabList, StyledTabPanel } from "./components/StyledTabs";
+export { tabElementId, tabPanelElementId } from "./components/StyledTabs";
+export type {
+  StyledTabItem,
+  StyledTabListProps,
+  StyledTabPanelProps,
+} from "./components/StyledTabs";
+
+// ---------------------------------------------------------------------------
 // Typography & dividers
 // ---------------------------------------------------------------------------
 export { default as StyledText } from "./components/StyledText";

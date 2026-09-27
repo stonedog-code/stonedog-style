@@ -1,6 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import StyledInputToggle from "../StyledInputToggle";
+import StyledFieldHelp, { fieldHelpId } from "../StyledFieldHelp";
 
 describe("StyledInputToggle", () => {
   it("is a switch", () => {
@@ -156,6 +157,164 @@ describe("StyledInputToggle", () => {
     );
     fireEvent.click(screen.getByTestId("my-toggle"));
     expect(onChange).toHaveBeenCalledWith(true);
+  });
+
+  describe("being described, not just named", () => {
+    it("writes ariaDescribedBy onto the SWITCH", () => {
+      // The defect: there was no prop at all, so a named switch could never be
+      // described. Asserted on the element with role=switch rather than on any
+      // element in the tree — the wrapper carrying it is exactly the bug.
+      render(
+        <StyledInputToggle
+          value={false}
+          onChange={() => {}}
+          label="Notifications"
+          ariaDescribedBy="notify-help"
+        />,
+      );
+      expect(screen.getByRole("switch")).toHaveAttribute(
+        "aria-describedby",
+        "notify-help",
+      );
+    });
+
+    it("takes several ids, as the attribute does", () => {
+      render(
+        <StyledInputToggle
+          value={false}
+          onChange={() => {}}
+          label="X"
+          ariaDescribedBy="a b"
+        />,
+      );
+      expect(screen.getByRole("switch")).toHaveAttribute(
+        "aria-describedby",
+        "a b",
+      );
+    });
+
+    it("sets no attribute at all when there is nothing to describe", () => {
+      // Not an empty string: an empty aria-describedby is not the same as no
+      // description, and some screen readers announce the gap.
+      render(<StyledInputToggle value={false} onChange={() => {}} label="X" />);
+      expect(screen.getByRole("switch")).not.toHaveAttribute(
+        "aria-describedby",
+      );
+    });
+
+    it("is announced with its description", () => {
+      render(
+        <>
+          <StyledInputToggle
+            value={false}
+            onChange={() => {}}
+            label="Notifications"
+            ariaDescribedBy="notify-help"
+          />
+          <p id="notify-help">Only for medication reminders.</p>
+        </>,
+      );
+      expect(screen.getByRole("switch")).toHaveAccessibleDescription(
+        "Only for medication reminders.",
+      );
+    });
+  });
+
+  describe("the id lands on the switch", () => {
+    it("puts a caller's id on the button, not on the wrapper", () => {
+      render(
+        <StyledInputToggle
+          value={false}
+          onChange={() => {}}
+          label="X"
+          id="notify"
+        />,
+      );
+      expect(screen.getByRole("switch")).toHaveAttribute("id", "notify");
+      expect(document.getElementById("notify")).toBe(
+        screen.getByRole("switch"),
+      );
+    });
+
+    it("lets StyledFieldHelp describe the switch with no shim", () => {
+      // The whole reason the id moved. StyledFieldHelp resolves its target
+      // with getElementById(htmlFor) and writes aria-describedby on whatever
+      // it finds — so with the id on the wrapper it described a <div> that
+      // nothing announces, and the switch stayed undescribed.
+      render(
+        <>
+          <StyledFieldHelp htmlFor="notify">
+            Only for medication reminders.
+          </StyledFieldHelp>
+          <StyledInputToggle
+            value={false}
+            onChange={() => {}}
+            label="Notifications"
+            id="notify"
+          />
+        </>,
+      );
+      expect(screen.getByRole("switch")).toHaveAttribute(
+        "aria-describedby",
+        fieldHelpId("notify"),
+      );
+      expect(screen.getByRole("switch")).toHaveAccessibleDescription(
+        "Only for medication reminders.",
+      );
+    });
+
+    it("merges with an ariaDescribedBy already on the switch", () => {
+      // StyledFieldHelp appends rather than replaces, and it has to still do
+      // that now that it can actually reach the button.
+      render(
+        <>
+          <StyledFieldHelp htmlFor="notify">Help.</StyledFieldHelp>
+          <StyledInputToggle
+            value={false}
+            onChange={() => {}}
+            label="X"
+            id="notify"
+            ariaDescribedBy="counter"
+          />
+        </>,
+      );
+      expect(screen.getByRole("switch")).toHaveAttribute(
+        "aria-describedby",
+        `counter ${fieldHelpId("notify")}`,
+      );
+    });
+
+    it("gives the wrapper no id when only `id` was passed", () => {
+      // Naming the old behaviour is `containerId`'s job. If `id` still reached
+      // the wrapper as well, the document would hold two elements claiming the
+      // same id and getElementById would answer whichever came first.
+      const { container } = render(
+        <StyledInputToggle
+          value={false}
+          onChange={() => {}}
+          label="X"
+          id="notify"
+        />,
+      );
+      expect(container.querySelectorAll("#notify")).toHaveLength(1);
+      expect(container.firstElementChild).not.toHaveAttribute("id");
+    });
+
+    it("containerId names the old placement for a host that wants it", () => {
+      render(
+        <StyledInputToggle
+          value={false}
+          onChange={() => {}}
+          label="X"
+          id="notify"
+          containerId="notify-wrap"
+        />,
+      );
+      const wrapper = document.getElementById("notify-wrap");
+      expect(wrapper).not.toBeNull();
+      expect(wrapper).not.toHaveAttribute("role");
+      expect(wrapper).toContainElement(screen.getByRole("switch"));
+    });
   });
 
   it("uses no palette literals", () => {
