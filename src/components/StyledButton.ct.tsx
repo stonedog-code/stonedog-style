@@ -262,9 +262,15 @@ test.describe("the label takes the variant's colour (NEH-1788)", () => {
    * exactly that. Overriding `textPrimary` underneath the button makes the old
    * defect (a label stuck on `textPrimary`) read as pure red, which no variant's
    * own colour is.
+   *
+   * It overrides the TOKEN variable, `--colors-text-primary`, not the host's
+   * `--hopper-box-primary-text`: the token is declared on `:root` as a `var()` of
+   * the host property, and a custom property holding a `var()` is resolved where
+   * it is declared, so re-pointing the host property underneath changes nothing.
+   * The control test below caught exactly that on the first attempt.
    */
   const SENTINEL = "rgb(255, 0, 0)";
-  const sentinelSurface = { ["--hopper-box-primary-text" as string]: SENTINEL } as CSSProperties;
+  const sentinelSurface = { ["--colors-text-primary" as string]: SENTINEL } as CSSProperties;
 
   const colours = (button: import("@playwright/test").Locator) =>
     button.evaluate((el) => {
