@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import StyledButton from "./StyledButton";
 import StyledBox from "./StyledBox";
+import StyledText from "./StyledText";
+import type { CSSProperties } from "react";
 
 /**
  * Everything here needs a layout engine, so none of it can live in the jest
@@ -251,69 +253,84 @@ test.describe("the label takes the variant's colour (NEH-1788)", () => {
    * So the assertion is on the element that holds the text: its computed colour
    * is the button's computed colour.
    */
-  const colours = (component: import("@playwright/test").Locator) =>
-    component.evaluate((button) => {
-      const holder = Array.from(button.querySelectorAll("*")).find((element) =>
+  /**
+   * The body text colour, replaced with one no variant uses.
+   *
+   * The harness theme gives `textPrimary` and `buttonTextAccent` the SAME
+   * value (#f8fafc), so in it "the label equals the button" is also true of the
+   * broken component for `solid` — the first version of these tests passed over
+   * exactly that. Overriding `textPrimary` underneath the button makes the old
+   * defect (a label stuck on `textPrimary`) read as pure red, which no variant's
+   * own colour is.
+   */
+  const SENTINEL = "rgb(255, 0, 0)";
+  const sentinelSurface = { ["--hopper-box-primary-text" as string]: SENTINEL } as CSSProperties;
+
+  const colours = (button: import("@playwright/test").Locator) =>
+    button.evaluate((el) => {
+      const holder = Array.from(el.querySelectorAll("*")).find((element) =>
         Array.from(element.childNodes).some(
           (node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "",
         ),
       );
       return {
-        button: getComputedStyle(button).color,
+        button: getComputedStyle(el).color,
         label: holder ? getComputedStyle(holder).color : null,
       };
     });
 
   for (const variant of ["solid", "outline", "matte", "glass", "ghost", "selected", "link"] as const) {
     test(`${variant}: at rest and under the pointer`, async ({ mount, page }) => {
-      const component = await mount(<StyledButton variant={variant}>Go</StyledButton>);
+      const component = await mount(
+        <div style={sentinelSurface}>
+          <StyledButton variant={variant}>Go</StyledButton>
+        </div>,
+      );
+      const button = component.getByRole("button");
 
       await page.mouse.move(0, 0);
       await page.mouse.move(2000, 2000);
-      const rest = await colours(component);
+      const rest = await colours(button);
       expect(rest.label).not.toBeNull();
       expect(rest.label).toBe(rest.button);
 
-      await component.hover();
-      const hovered = await colours(component);
+      await button.hover();
+      const hovered = await colours(button);
       expect(hovered.label).toBe(hovered.button);
     });
   }
 
-  test("the assertion above can fail: the button's colour is not the body text colour", async ({
+  test("the assertion above can fail: the sentinel reaches body text and not the button", async ({
     mount,
   }) => {
-    // If `solid` happened to compute to `textPrimary` in this harness, "the
-    // label equals the button" would be true of the broken component too, and
-    // seven green tests would be measuring nothing. So the two colours are
-    // shown to differ first.
+    // Both halves of the plant. A default `StyledText` under the override reads
+    // the sentinel — so a label stuck on `textPrimary` WOULD read red — and the
+    // solid button's own colour does not. Without the first, the override could
+    // be misspelled and every test above would pass over nothing.
     const component = await mount(
-      <StyledBox>
-        <StyledButton variant="solid" data-testid="button">
-          Go
-        </StyledButton>
-        <span data-testid="body" style={{ color: "var(--colors-text-primary)" }}>
-          body
-        </span>
-      </StyledBox>,
+      <div style={sentinelSurface}>
+        <StyledButton variant="solid">Go</StyledButton>
+        <StyledText data-testid="body">body</StyledText>
+      </div>,
     );
-    const button = await component
-      .getByTestId("button")
-      .evaluate((el) => getComputedStyle(el).color);
+    const button = await component.getByRole("button").evaluate((el) => getComputedStyle(el).color);
     const body = await component.getByTestId("body").evaluate((el) => getComputedStyle(el).color);
-    expect(button).not.toBe(body);
+    expect(body).toBe(SENTINEL);
+    expect(button).not.toBe(SENTINEL);
   });
 
   test("the busy label takes it too", async ({ mount, page }) => {
     // The spinner's text is the same component one level further down, and it
     // is what a person reads while they wait.
     const component = await mount(
-      <StyledButton variant="solid" loading loadText="Saving">
-        Go
-      </StyledButton>,
+      <div style={sentinelSurface}>
+        <StyledButton variant="solid" loading loadText="Saving">
+          Go
+        </StyledButton>
+      </div>,
     );
     await expect(page.getByRole("status")).toContainText("Saving");
-    const measured = await colours(component);
+    const measured = await colours(component.getByRole("button"));
     expect(measured.label).toBe(measured.button);
   });
 });
