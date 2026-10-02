@@ -179,9 +179,18 @@ export const buttonRecipe = defineRecipe({
       },
       ghost: {
         bg: "boxBgSecondary/90",
-        color: "textPrimary",
+        // `textSecondary`, the contract's partner for `boxBgSecondary`
+        // (NEH-1788). This said `textPrimary`, which is the text for a
+        // DIFFERENT surface: a host's theme is validated pair by pair, so
+        // `textSecondary` on `boxBgSecondary` is a ratio every host has
+        // checked and `textPrimary` on it is one nobody has. It happened to be
+        // legible in the themes that exist; that is luck, and it is the same
+        // luck `solid` ran out of.
+        color: "textSecondary",
         _hover: {
           bg: "boxBgSecondary",
+          // Restated with the surface, like every other state that paints one.
+          color: "textSecondary",
         },
       },
       selected: {
@@ -246,11 +255,29 @@ export const buttonRecipe = defineRecipe({
         backgroundColor: "transparent",
         border: "1px solid transparent",
         textDecoration: "underline",
+        /**
+         * The pointer is acknowledged by the UNDERLINE, never by the colour
+         * (NEH-1788).
+         *
+         * These two states used to say `color: buttonTextAccent` and
+         * `color: buttonTextSecondary`. Both are text tokens that exist to sit
+         * ON a button surface (`TEXT_BACKGROUND_PAIRS`), and this variant
+         * paints no surface at all — so under the pointer a link took an
+         * on-accent colour and put it on whatever the page happened to be.
+         * Measured in a consumer's light theme: `rgb(255,255,255)` on white,
+         * **1.00:1**, on every link-styled control in the product. A dark
+         * theme survives it, which is how it shipped.
+         *
+         * A state may not introduce a colour for a surface it does not paint.
+         * `state-colour-pairing.test.ts` holds that for every recipe; a heavier
+         * underline is a cue that works on any surface and does not depend on
+         * colour, which is the better cue regardless.
+         */
         _hover: {
-          color: "buttonTextAccent",
+          textDecorationThickness: "0.14em",
         },
         _active: {
-          color: "buttonTextSecondary",
+          textDecorationThickness: "0.14em",
         },
       },
     },

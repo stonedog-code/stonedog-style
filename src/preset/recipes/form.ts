@@ -32,6 +32,12 @@ export const formRecipe = defineRecipe({
         color: "textPrimary",
         _hover: {
           bg: "boxBgAccent",
+          // The hover repaints the surface, so it states the text that goes on
+          // the new one (NEH-1788). Left to ride along, `textPrimary` on
+          // `boxBgAccent` is the 1.17:1 pairing the `solid` variant above was
+          // fixed for — reintroduced under the pointer, where no resting-state
+          // check looks.
+          color: "textAccent",
         },
         "& > li:not(:last-child)": {
           borderBottom: "1px solid",

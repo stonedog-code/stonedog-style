@@ -146,9 +146,26 @@ const StyledButton = React.forwardRef<HTMLButtonElement, StyledButtonProps>(
         >
           {leftIcon && <IconSlot side="left">{leftIcon}</IconSlot>}
           {loading ? (
-            <StyledSpinner loadText={loadText} />
+            <StyledSpinner loadText={loadText} color="inherit" />
           ) : (
-            <StyledText size={size} fixedSize={fixedSize}>
+            /*
+             * `color="inherit"`, and it is the whole point (NEH-1788).
+             *
+             * `buttonRecipe` states a text colour for every variant — the one
+             * that pairs with the background that variant paints, at rest and
+             * again on hover. `StyledText` defaults its own `color` to
+             * `textPrimary` and sets it with a utility class, which outranks
+             * the recipe. So for as long as this wrapper said nothing, the
+             * LABEL was `textPrimary` on every variant, and every fix to the
+             * recipe's pairing (NEH-796, NEH-877, NEH-881) changed the
+             * button's `color` while the text on screen did not move.
+             *
+             * Measured in a consumer's light theme, on the release carrying
+             * those fixes: `rgb(20,24,28)` on `rgb(29,91,128)`, 2.43:1 at rest
+             * and 1.79:1 hovered, on every primary button. The busy label
+             * above takes the same value for the same reason.
+             */
+            <StyledText size={size} fixedSize={fixedSize} color="inherit">
               {children}
             </StyledText>
           )}

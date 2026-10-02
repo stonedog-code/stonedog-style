@@ -26,6 +26,11 @@ export const menuRecipe = defineSlotRecipe({
       cursor: "pointer",
       _hover: {
         backgroundColor: "boxBgAccent",
+        // Stated with the surface it belongs to (NEH-1788). The item declares
+        // no colour of its own, so its text is whatever the menu inherited —
+        // chosen for the menu's surface, not for the accent one this state
+        // paints over it.
+        color: "textAccent",
       },
       _dark: {
         _hover: {

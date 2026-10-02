@@ -2,7 +2,7 @@
 
 import React from "react";
 import StyledHStack from "./StyledHStack";
-import StyledText from "./StyledText";
+import StyledText, { type StyledTextProps } from "./StyledText";
 import { log } from "../config/logger";
 
 /**
@@ -45,10 +45,22 @@ export interface StyledSpinnerProps
    * about whether to wait or navigate away.
    */
   loadText?: React.ReactNode;
+  /**
+   * The colour of the label and the dots. Defaults to `textPrimary`, which is
+   * right for a spinner standing on a page.
+   *
+   * It exists for the spinner that stands INSIDE something that states its own
+   * text colour — a busy `StyledButton` passes `"inherit"`, so "Saving…" takes
+   * the colour the button's variant chose for its background rather than the
+   * body colour (NEH-1788). This is not the `color` prop that was removed from
+   * this component for doing nothing: this one is read, by both text nodes.
+   */
+  color?: StyledTextProps["color"];
 }
 
 export const StyledSpinner = ({
   loadText = "Loading",
+  color = "textPrimary",
   ...rest
 }: StyledSpinnerProps) => {
   log.trace("StyledSpinner rendered");
@@ -71,7 +83,7 @@ export const StyledSpinner = ({
     // than a missing nicety.
     <StyledHStack gap={1} role="status" {...rest}>
       {typeof loadText === "string" ? (
-        <StyledText>{loadText}</StyledText>
+        <StyledText color={color}>{loadText}</StyledText>
       ) : (
         loadText
       )}
@@ -81,7 +93,9 @@ export const StyledSpinner = ({
         would otherwise re-announce the whole thing twice a second as they
         change — turning a helpful status into unusable chatter.
       */}
-      <StyledText aria-hidden="true">{DOT_STATES[dotIndex]}</StyledText>
+      <StyledText aria-hidden="true" color={color}>
+        {DOT_STATES[dotIndex]}
+      </StyledText>
     </StyledHStack>
   );
 };

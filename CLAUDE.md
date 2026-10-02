@@ -157,6 +157,10 @@ and nothing visible until someone looks at the pixels.
 | `fontSizeScale` on `StyleConfig` | the package's fallbacks at 16px per rem | new in **0.30.0** (NEH-1677). `useChartAxisFontSize` converts a key to px against it; before it, the conversion read the package's static fallbacks and a hardcoded 16, so a host pinning a larger `--font-sizes-*` ramp (HopperGuard) got axis ticks at **18px beside 32px body text**. Unset, byte-identical to 0.29.0 |
 | `StyledChart showTable: true` | the table is always visible, as before | `"collapsible"` is new in **0.31.0** (NEH-1647) and is **opt-in**. The default did not move, and `StyledChartTableDisclosure.ct.tsx`'s last test is there to say so |
 | `StyledInputToggle id` | lands on the `role="switch"` **button** | changed in **0.32.0** (NEH-1720); before it, `id` went on the wrapper `<div>`, so every id-based association described a box nothing announces. `containerId` names the old placement |
+| `StyledButton` label colour | **inherits the button's**, i.e. the variant's own text colour | changed in **0.33.0** (NEH-1788); before it the label was `textPrimary` on EVERY variant, whatever the recipe stated — see "A wrapper can defeat the recipe it sits in" below. A host whose theme made that legible will see labels move to the variant's paired colour |
+| `button ghost` text | `textSecondary`, the contract's partner for `boxBgSecondary` | changed in **0.33.0** (NEH-1788); was `textPrimary`, a pairing no host's theme validates |
+| `button link` hover / active | the colour does not change; the underline thickens | changed in **0.33.0** (NEH-1788); before it they took `buttonTextAccent` / `buttonTextSecondary` over no painted surface — white on white in a light theme |
+| `form outline` hover, `menu` item hover | state `textAccent` with the `boxBgAccent` they paint | changed in **0.33.0** (NEH-1788); before it the text rode its resting colour onto the accent surface |
 
 **0.27.0 finishes what 0.26.0 started, and the five components needed five
 different fixes because they were frozen five different ways.** "The recipe sets
@@ -878,6 +882,44 @@ consequence is easy to trip over: `variant="button"` does not type-check, and if
 you reach past the type it silently renders `solid`. Anyone measuring "do the
 variants differ" must measure the seven the component exposes, not the eight the
 recipe defines. NEH-310 left `button` alone for that reason.
+
+### A wrapper can defeat the recipe it sits in (NEH-1788, 0.33.0)
+
+`buttonRecipe` states a text colour for every variant. `StyledButton` wraps its
+label in `StyledText`, whose `color` prop defaults to `textPrimary` and is
+applied as a **utility class** — and utilities outrank recipes. So the label was
+`textPrimary` on every variant, for as long as the component existed, and three
+separate fixes to the recipe's pairings (NEH-796, NEH-877, NEH-881) each moved
+the button's `color` while **the text on screen did not change at all**.
+
+Every guard agreed with the fix, and every guard was right about what it
+measured:
+
+| the check | what it answered | what it was read as |
+|---|---|---|
+| `variant-contrast-pairing.test.ts` | "the RECIPE pairs this background with its partner" | "the button's text is legible" |
+| a consumer's browser sweep, first version | "the BUTTON's computed colour is legible" | "the label is" — it is a different element |
+
+Measured in a consumer's light theme on the release carrying those fixes:
+`rgb(20,24,28)` on `rgb(29,91,128)`, **2.43:1 at rest**, on every primary
+button. It was found by measuring the element that holds the text node.
+
+Three rules follow:
+
+- **Inside anything that states its own text colour, a `StyledText` says
+  `color="inherit"`.** `StyledButton` does, for its label and for the busy
+  label (`StyledSpinner` takes a `color` for exactly this).
+- **Measure the element that HOLDS the text.** A control's own `color` is not
+  what a person reads when the label is a child that states one.
+  `StyledButton.ct.tsx` walks to the text node's parent and compares it with
+  the button.
+- **A state is a pairing too.** `state-colour-pairing.test.ts` reads every
+  hover, active and focus rule in the generated stylesheet: a state that
+  repaints the surface states the partner text in the same rule, and a state
+  that paints nothing introduces no new colour. Its first version split
+  selector lists on every comma, cut `:is(:hover, [data-hover])` in half,
+  matched **zero** rules and reported no offenders — and the count assertion in
+  the same file is what said so. Keep that assertion.
 
 ## Type comes from the theme, shape stays here (NEH-289)
 

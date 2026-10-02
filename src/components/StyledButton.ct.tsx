@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import StyledButton from "./StyledButton";
 import StyledBox from "./StyledBox";
+import StyledText from "./StyledText";
+import type { CSSProperties } from "react";
 
 /**
  * Everything here needs a layout engine, so none of it can live in the jest
@@ -231,5 +233,145 @@ test.describe("keyboard", () => {
     await expect(page.getByRole("button")).toBeFocused();
     await page.keyboard.press("Enter");
     expect(clicked).toBe(true);
+  });
+});
+
+test.describe("the label takes the variant's colour (NEH-1788)", () => {
+  /**
+   * `buttonRecipe` states a text colour for every variant — the partner of the
+   * background that variant paints. `StyledButton` wraps its label in a
+   * `StyledText`, whose own `color` defaults to `textPrimary` and is set by a
+   * utility class that outranks the recipe. For as long as that wrapper said
+   * nothing, the label was `textPrimary` on EVERY variant, and each fix to the
+   * recipe's pairing moved the button's `color` while the text on screen stayed
+   * exactly where it was.
+   *
+   * Only a browser can see this. jsdom has no cascade, and the stylesheet-level
+   * guards read what the recipe DECLARES — which was correct throughout. The
+   * defect lived in which of two correct declarations won.
+   *
+   * So the assertion is on the element that holds the text: its computed colour
+   * is the button's computed colour.
+   */
+  /**
+   * The body text colour, replaced with one no variant uses.
+   *
+   * The harness theme gives `textPrimary` and `buttonTextAccent` the SAME
+   * value (#f8fafc), so in it "the label equals the button" is also true of the
+   * broken component for `solid` — the first version of these tests passed over
+   * exactly that. Overriding `textPrimary` underneath the button makes the old
+   * defect (a label stuck on `textPrimary`) read as pure red, which no variant's
+   * own colour is.
+   *
+   * It overrides the TOKEN variable, `--colors-text-primary`, not the host's
+   * `--hopper-box-primary-text`: the token is declared on `:root` as a `var()` of
+   * the host property, and a custom property holding a `var()` is resolved where
+   * it is declared, so re-pointing the host property underneath changes nothing.
+   * The control test below caught exactly that on the first attempt.
+   */
+  const SENTINEL = "rgb(255, 0, 0)";
+  const sentinelSurface = { ["--colors-text-primary" as string]: SENTINEL } as CSSProperties;
+
+  const colours = (button: import("@playwright/test").Locator) =>
+    button.evaluate((el) => {
+      const holder = Array.from(el.querySelectorAll("*")).find((element) =>
+        Array.from(element.childNodes).some(
+          (node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "",
+        ),
+      );
+      return {
+        button: getComputedStyle(el).color,
+        label: holder ? getComputedStyle(holder).color : null,
+      };
+    });
+
+  for (const variant of ["solid", "outline", "matte", "glass", "ghost", "selected", "link"] as const) {
+    test(`${variant}: at rest and under the pointer`, async ({ mount, page }) => {
+      const component = await mount(
+        <div style={sentinelSurface}>
+          <StyledButton variant={variant}>Go</StyledButton>
+        </div>,
+      );
+      const button = component.getByRole("button");
+
+      await page.mouse.move(0, 0);
+      await page.mouse.move(2000, 2000);
+      const rest = await colours(button);
+      expect(rest.label).not.toBeNull();
+      expect(rest.label).toBe(rest.button);
+
+      await button.hover();
+      const hovered = await colours(button);
+      expect(hovered.label).toBe(hovered.button);
+    });
+  }
+
+  test("the assertion above can fail: the sentinel reaches body text and not the button", async ({
+    mount,
+  }) => {
+    // Both halves of the plant. A default `StyledText` under the override reads
+    // the sentinel — so a label stuck on `textPrimary` WOULD read red — and the
+    // solid button's own colour does not. Without the first, the override could
+    // be misspelled and every test above would pass over nothing.
+    const component = await mount(
+      <div style={sentinelSurface}>
+        <StyledButton variant="solid">Go</StyledButton>
+        <StyledText data-testid="body">body</StyledText>
+      </div>,
+    );
+    const button = await component.getByRole("button").evaluate((el) => getComputedStyle(el).color);
+    const body = await component.getByTestId("body").evaluate((el) => getComputedStyle(el).color);
+    expect(body).toBe(SENTINEL);
+    expect(button).not.toBe(SENTINEL);
+  });
+
+  test("the busy label takes it too", async ({ mount, page }) => {
+    // The spinner's text is the same component one level further down, and it
+    // is what a person reads while they wait.
+    const component = await mount(
+      <div style={sentinelSurface}>
+        <StyledButton variant="solid" loading loadText="Saving">
+          Go
+        </StyledButton>
+      </div>,
+    );
+    await expect(page.getByRole("status")).toContainText("Saving");
+    const measured = await colours(component.getByRole("button"));
+    expect(measured.label).toBe(measured.button);
+  });
+});
+
+test.describe("a link keeps its colour under the pointer (NEH-1788)", () => {
+  /**
+   * The `link` variant paints no background, so a hover that changed its colour
+   * to an on-accent text token put that colour on whatever the page was —
+   * white on white in a consumer's light theme. The pointer is acknowledged by
+   * the underline instead, which works on any surface.
+   */
+  test("the colour does not move, and the underline does", async ({ mount, page }) => {
+    const component = await mount(<StyledButton variant="link">Read more</StyledButton>);
+
+    await page.mouse.move(0, 0);
+    await page.mouse.move(2000, 2000);
+    const rest = await component.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return { colour: style.color, thickness: style.textDecorationThickness };
+    });
+
+    await component.hover();
+    const hovered = await component.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return {
+        colour: style.color,
+        thickness: style.textDecorationThickness,
+        line: style.textDecorationLine,
+      };
+    });
+
+    expect(hovered.colour).toBe(rest.colour);
+    expect(hovered.line).toContain("underline");
+    // The cue that replaced the colour change has to actually be there, or the
+    // hover has no feedback at all.
+    expect(hovered.thickness).not.toBe(rest.thickness);
   });
 });

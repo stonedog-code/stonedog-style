@@ -75,6 +75,10 @@ export const stackRecipe = defineRecipe({
             // identical colour as the text — the label vanished under the
             // pointer, which is the one moment a reader is looking at it.
             bg: "boxBgPrimary",
+            // And the text that goes on it, said here rather than inherited
+            // from the resting rule (NEH-1788). It is the same token today;
+            // stating it is what keeps the pairing true when either moves.
+            color: "textPrimary",
             },
         },
         aurora: {
