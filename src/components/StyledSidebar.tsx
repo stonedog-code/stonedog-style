@@ -2,6 +2,9 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { styled } from "styled-system/jsx";
+import { cva } from "styled-system/css";
+import { useLinkComponent } from "../config/style-config";
+import type { LinkComponentProps } from "../config/link-component";
 import StyledBox from "./StyledBox";
 import StyledText from "./StyledText";
 import StyledVStack from "./StyledVStack";
@@ -61,13 +64,36 @@ export interface SidebarItem {
   description?: string;
   /** Revealed by the item's help control, on click. */
   help?: React.ReactNode;
+  /**
+   * Where this tool lives. With it, the item renders as a real link — an `<a>`
+   * through the host's `linkComponent` (a plain anchor unless the host
+   * configured its router's link on `StonedogStyleProvider`) — carrying
+   * `aria-current="page"` when selected. Without it, the item is a `<button>`
+   * exactly as before.
+   *
+   * A navigation landmark full of buttons announces "button" for every
+   * destination, cannot be middle-clicked or opened in a new tab, and forces
+   * the host to `router.push` from `onSelect`. A link does none of that.
+   * `onSelect` is still called for an ordinary click, as a notification — the
+   * browser (or the host's router link) does the navigating, so a host must
+   * not navigate again from it.
+   */
+  href?: string;
 }
 
 export interface StyledSidebarProps {
   /** Already ordered and already filtered by the host. */
   items: SidebarItem[];
   selectedId?: string;
-  onSelect: (id: string) => void;
+  /**
+   * Reports a choice. For a `<button>` item this is the only thing a press
+   * does; for an `href` item it is a notification of an ordinary
+   * (unmodified, primary-button) click, and the link itself navigates.
+   *
+   * Optional only so a sidebar made entirely of `href` items need not pass a
+   * no-op. A button item with no `onSelect` does nothing when pressed.
+   */
+  onSelect?: (id: string) => void;
   /** How to handle more items than fit. Default `"scroll"`. */
   overflow?: "scroll" | "paging";
   /** Items per page when `overflow="paging"`. */
@@ -126,7 +152,14 @@ export interface StyledSidebarProps {
   "aria-label"?: string;
 }
 
-const ItemButton = styled("button", {
+/**
+ * The row's box, shared by the `<button>` and the `<a>` forms.
+ *
+ * A `cva` rather than an inline `styled()` config so both elements take the
+ * identical, statically-extracted base: two literal copies would drift, and a
+ * variable spread into one of them would not be extracted at all.
+ */
+const sidebarItem = cva({
   base: {
     display: "flex",
     alignItems: "center",
@@ -149,6 +182,37 @@ const ItemButton = styled("button", {
     cursor: "pointer",
   },
 });
+
+const ItemButton = styled("button", sidebarItem);
+
+/**
+ * The host's link component, as a target `styled()` can wrap.
+ *
+ * Read through the hook at render rather than captured at module scope, so a
+ * host's `linkComponent` on `StonedogStyleProvider` is what renders — the same
+ * seam `StyledLink` uses, and deliberately not a per-sidebar prop: the choice
+ * of router is app-wide, and per-call-site is how one app ends up with two
+ * navigation behaviours.
+ */
+const SidebarHostLink = React.forwardRef<HTMLAnchorElement, LinkComponentProps>(
+  function SidebarHostLink(props, ref) {
+    const HostLink = useLinkComponent();
+    return <HostLink ref={ref} {...props} />;
+  },
+);
+
+const ItemLink = styled(SidebarHostLink, sidebarItem);
+
+/** A click the browser would turn into "open elsewhere", which is not a selection. */
+function isModifiedClick(event: React.MouseEvent): boolean {
+  return (
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  );
+}
 
 /**
  * The label column.
@@ -277,10 +341,78 @@ const StyledSidebar: React.FC<StyledSidebarProps> = ({
       {visible.map((item) => {
         const isSelected = item.id === selectedId;
 
-        const button = (
-          <ItemButton
+        // The row's contents, identical in both forms.
+        const content = (
+          <>
+              {item.icon !== undefined && item.icon !== null && <ItemIcon>{item.icon}</ItemIcon>}
+              {/* The labels are dropped entirely only under the §20a opt-in.
+                  Plain `collapsed` still renders the name and drops just the
+                  description, which is what §20 asks for and remains the
+                  default for every host that says nothing. */}
+              {!iconOnly && (
+                <ItemLabels>
+                  <StyledText
+                    // Weight, not just colour. Selection must survive greyscale,
+                    // a high-contrast theme and colour blindness (PRD §C10) —
+                    // and `aria-current` carries it to assistive technology.
+                    fontWeight={isSelected ? "bold" : "normal"}
+                    color={isSelected ? "textAccent" : "textPrimary"}
+                  >
+                    {item.label}
+                  </StyledText>
+                  {!isCollapsed && item.description && (
+                    // `size`, not `fontSize`: StyledText writes its resolved size
+                    // into an inline `style`, which beats any class a `fontSize`
+                    // prop would generate. The prop looked right and did nothing.
+                    <StyledText size="sm" color={isSelected ? "textAccent" : "textSecondary"}>
+                      {item.description}
+                    </StyledText>
+                  )}
+                </ItemLabels>
+              )}
+          </>
+        );
+
+        const button =
+          item.href !== undefined ? (
+            <ItemLink
+              href={item.href}
+              onClick={(event: React.MouseEvent<HTMLAnchorElement>) => {
+                // A notification, not a navigation: the link navigates. A
+                // modified or middle click opens the tool elsewhere, which is
+                // not choosing it here.
+                if (!isModifiedClick(event)) onSelect?.(item.id);
+              }}
+              // `page`, the token for "the current page in a set of
+              // navigation links" — what a destination link in a navigation
+              // landmark is. The button form keeps `true`.
+              aria-current={isSelected ? "page" : undefined}
+              // An anchor carries the UA link colour and underline; a button
+              // carries neither. The label states its own colour, so the row
+              // inherits — the icon then takes the surrounding text colour
+              // rather than the browser's link blue.
+              color="inherit"
+              textDecoration="none"
+              // Everything below mirrors the button form exactly — read the
+              // reasoning there. Repeated as literals rather than spread from
+              // an object, because Panda extracts style props only from JSX it
+              // can read, and a spread is invisible to it.
+              aria-label={iconOnly ? item.label : undefined}
+              data-testid={`sidebar-item-${item.id}`}
+              data-icon-only={iconOnly ? "true" : undefined}
+              data-selected={isSelected ? "true" : undefined}
+              borderColor={isSelected ? "borderBgAccent" : "transparent"}
+              background={isSelected ? "boxBgAccent" : "transparent"}
+              minWidth={iconOnly ? CONTROL_MIN_TARGET : 0}
+              justifyContent={iconOnly ? "center" : "flex-start"}
+              px={iconOnly ? "1" : "3"}
+            >
+              {content}
+            </ItemLink>
+          ) : (
+            <ItemButton
               type="button"
-              onClick={() => onSelect(item.id)}
+              onClick={() => onSelect?.(item.id)}
               // Selection is announced, not just drawn.
               aria-current={isSelected ? "true" : undefined}
               // The name survives the icon-only rail. Without this the button's
@@ -313,34 +445,9 @@ const StyledSidebar: React.FC<StyledSidebarProps> = ({
               justifyContent={iconOnly ? "center" : "flex-start"}
               px={iconOnly ? "1" : "3"}
             >
-              {item.icon !== undefined && item.icon !== null && <ItemIcon>{item.icon}</ItemIcon>}
-              {/* The labels are dropped entirely only under the §20a opt-in.
-                  Plain `collapsed` still renders the name and drops just the
-                  description, which is what §20 asks for and remains the
-                  default for every host that says nothing. */}
-              {!iconOnly && (
-                <ItemLabels>
-                  <StyledText
-                    // Weight, not just colour. Selection must survive greyscale,
-                    // a high-contrast theme and colour blindness (PRD §C10) —
-                    // and `aria-current` carries it to assistive technology.
-                    fontWeight={isSelected ? "bold" : "normal"}
-                    color={isSelected ? "textAccent" : "textPrimary"}
-                  >
-                    {item.label}
-                  </StyledText>
-                  {!isCollapsed && item.description && (
-                    // `size`, not `fontSize`: StyledText writes its resolved size
-                    // into an inline `style`, which beats any class a `fontSize`
-                    // prop would generate. The prop looked right and did nothing.
-                    <StyledText size="sm" color={isSelected ? "textAccent" : "textSecondary"}>
-                      {item.description}
-                    </StyledText>
-                  )}
-                </ItemLabels>
-              )}
+              {content}
             </ItemButton>
-        );
+          );
 
         return (
           <StyledHStack key={item.id} gap={1} alignItems="center" role="listitem">

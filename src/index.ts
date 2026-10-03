@@ -335,6 +335,29 @@ export { default as StyledFieldset } from "./components/StyledFieldset";
 export type { StyledFieldsetProps, FieldsetVariant } from "./components/StyledFieldset";
 export { FIELDSET_VARIANTS } from "./components/StyledFieldset";
 
+export {
+  default as StyledField,
+  StyledField as Field,
+  fieldErrorId,
+} from "./components/StyledField";
+export type {
+  StyledFieldProps,
+  FieldControlProps,
+  FieldKind,
+} from "./components/StyledField";
+
+export {
+  default as StyledInlineConfirm,
+  StyledInlineConfirm as InlineConfirm,
+} from "./components/StyledInlineConfirm";
+export type {
+  StyledInlineConfirmProps,
+  StyledInlineConfirmStepUp,
+} from "./components/StyledInlineConfirm";
+
+export { default as StyledMenu, StyledMenu as Menu } from "./components/StyledMenu";
+export type { StyledMenuProps, StyledMenuItem } from "./components/StyledMenu";
+
 // ---------------------------------------------------------------------------
 // Data display
 // ---------------------------------------------------------------------------
