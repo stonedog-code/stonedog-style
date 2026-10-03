@@ -1,5 +1,8 @@
+import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import StyledSidebar, { type SidebarItem } from "../StyledSidebar";
+import { StonedogStyleProvider } from "../../config/style-config";
+import type { LinkComponent } from "../../config/link-component";
 
 /**
  * StyledSidebar, against PRD-0001.
@@ -426,5 +429,80 @@ describe("StyledSidebar — uncontrolled collapse", () => {
     expect(onCollapsedChange).toHaveBeenCalledWith(true);
     // Still expanded: the host owns the value and has not changed it yet.
     expect(screen.getByText("Events & appointments")).toBeInTheDocument();
+  });
+});
+
+/**
+ * `href` items (0.34.0). The navigation landmark used to hold only buttons, so
+ * every destination announced as "button", could not be opened in a new tab,
+ * and made the host `router.push` from `onSelect`. These pin the link form —
+ * and, just as much, that an item WITHOUT `href` is still exactly the button it
+ * was, because three products render this component today.
+ */
+describe("StyledSidebar — href items render as links", () => {
+  const LINKED: SidebarItem[] = [
+    { id: "home", label: "Home", href: "/home" },
+    { id: "filings", label: "Filings", href: "/filings", description: "What is due" },
+    { id: "legacy", label: "Legacy tool" },
+  ];
+
+  it("renders a real link with the destination, not a button", () => {
+    render(<StyledSidebar items={LINKED} />);
+    const link = screen.getByRole("link", { name: /Filings/ });
+    expect(link.tagName).toBe("A");
+    expect(link).toHaveAttribute("href", "/filings");
+    expect(screen.queryByRole("button", { name: /Filings/ })).not.toBeInTheDocument();
+  });
+
+  it("marks the selected link aria-current=page, and only that one", () => {
+    render(<StyledSidebar items={LINKED} selectedId="filings" />);
+    expect(screen.getByRole("link", { name: /Filings/ })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /Home/ })).not.toHaveAttribute("aria-current");
+  });
+
+  it("leaves an item without href as the button it always was", () => {
+    render(<StyledSidebar items={LINKED} selectedId="legacy" onSelect={jest.fn()} />);
+    const button = screen.getByRole("button", { name: /Legacy tool/ });
+    expect(button).toHaveAttribute("type", "button");
+    // The button form keeps its own token; changing it would move every
+    // existing consumer's accessibility tree.
+    expect(button).toHaveAttribute("aria-current", "true");
+  });
+
+  it("tells onSelect about an ordinary click, but not a modified one", () => {
+    const onSelect = jest.fn();
+    render(<StyledSidebar items={LINKED} onSelect={onSelect} />);
+    const link = screen.getByRole("link", { name: /Home/ });
+    // jsdom does not navigate; the point is only which clicks count.
+    fireEvent.click(link, { ctrlKey: true });
+    fireEvent.click(link, { metaKey: true });
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.click(link);
+    expect(onSelect).toHaveBeenCalledWith("home");
+  });
+
+  it("renders through the host's linkComponent when one is configured", () => {
+    const HostLink = React.forwardRef<HTMLAnchorElement, React.AnchorHTMLAttributes<HTMLAnchorElement>>(
+      function HostLink(props, ref) {
+        return <a ref={ref} data-host-link="yes" {...props} />;
+      },
+    ) as unknown as LinkComponent;
+    render(
+      <StonedogStyleProvider linkComponent={HostLink}>
+        <StyledSidebar items={LINKED} />
+      </StonedogStyleProvider>,
+    );
+    expect(screen.getByRole("link", { name: /Home/ })).toHaveAttribute("data-host-link", "yes");
+  });
+
+  it("keeps the tool's name as the link's name on the icon-only rail", () => {
+    render(
+      <StyledSidebar
+        items={[{ id: "home", label: "Home", href: "/home", icon: <svg aria-hidden="true" /> }]}
+        collapsed
+        iconOnlyWhenCollapsed
+      />,
+    );
+    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/home");
   });
 });

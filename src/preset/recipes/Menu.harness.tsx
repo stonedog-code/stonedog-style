@@ -4,11 +4,10 @@ import { menuRecipe } from "styled-system/recipes";
 /**
  * Mount target for `Menu.ct.tsx`.
  *
- * `menuRecipe` has **no component in this package** — consumers build their own
- * `StyledMenu` on top of it (HopperGuard does). So the harness applies the real
- * generated class directly rather than going through a component, which is the
- * honest thing to test here: the recipe is the whole of what this package ships
- * for a menu, and it is where the tap-target floor has to be stated.
+ * The harness applies the real generated class directly rather than going
+ * through `StyledMenu`, because a host may build its own menu on this recipe
+ * (HopperGuard does) and the tap-target floor has to hold for that host too —
+ * it is stated in the recipe, not in the component.
  *
  * The font-size profile is a plain `--font-sizes-*` override on the wrapper,
  * because that is exactly how a host retunes the scale. Passing it lets the

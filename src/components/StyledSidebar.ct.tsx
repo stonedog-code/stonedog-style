@@ -7,6 +7,8 @@ import {
   SidebarIconOnly,
   SidebarIconOnlyScrolling,
   SidebarIconOnlyAtDensity,
+  SidebarLinks,
+  SidebarLinksIconOnly,
 } from "./StyledSidebar.harness";
 
 /**
@@ -376,5 +378,63 @@ test.describe("icon-only rail fits at every density", () => {
       .getByTestId("sidebar-scroll")
       .evaluate((el) => getComputedStyle(el).scrollbarGutter);
     expect(gutter).toContain("stable");
+  });
+});
+
+/**
+ * `href` items render as `<a>` (0.34.0). The button rows above already prove
+ * the box; these prove the LINK form inherits all of it — an anchor is
+ * `display: inline` with a link colour and an underline by default, so a
+ * shared recipe that silently failed to apply would show up here and nowhere
+ * else.
+ */
+test.describe("href items", () => {
+  test("are links, and clear the same 60px row floor", async ({ mount }) => {
+    const component = await mount(<SidebarLinks />);
+    const rows = component.getByRole("link");
+    await expect(rows).toHaveCount(4);
+    for (const row of await rows.all()) {
+      const box = await row.boundingBox();
+      expect(box!.height).toBeGreaterThanOrEqual(60);
+    }
+  });
+
+  test("carry no UA link underline or link colour", async ({ mount }) => {
+    const component = await mount(<SidebarLinks />);
+    const style = await component.getByTestId("sidebar-item-notes").evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { decoration: s.textDecorationLine, color: s.color, display: s.display };
+    });
+    expect(style.decoration).toBe("none");
+    // `inherit` from the context the harness paints — not the UA's link blue.
+    expect(style.color).toBe("rgb(1, 2, 3)");
+    expect(style.display).toBe("flex");
+  });
+
+  test("the selected link is drawn like the selected button, and announced as the page", async ({ mount }) => {
+    const component = await mount(<SidebarLinks />);
+    const selected = component.getByTestId("sidebar-item-calendar");
+    const plain = component.getByTestId("sidebar-item-notes");
+    await expect(selected).toHaveAttribute("aria-current", "page");
+    await expect(plain).not.toHaveAttribute("aria-current");
+    const bg = (l: typeof selected) => l.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(await bg(selected)).not.toBe(await bg(plain));
+    expect(await bg(selected)).not.toBe("rgba(0, 0, 0, 0)");
+  });
+
+  test("Enter follows the link and selection follows it", async ({ mount, page }) => {
+    const component = await mount(<SidebarLinks />);
+    await component.getByTestId("sidebar-item-tasks").focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/#tasks$/);
+    await expect(component.getByTestId("sidebar-item-tasks")).toHaveAttribute("aria-current", "page");
+  });
+
+  test("on the icon-only rail a link keeps its name and a 48px target", async ({ mount }) => {
+    const component = await mount(<SidebarLinksIconOnly />);
+    const link = component.getByRole("link", { name: "Calendar" });
+    const box = await link.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(48);
+    expect(box!.height).toBeGreaterThanOrEqual(48);
   });
 });
