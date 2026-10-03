@@ -4,10 +4,11 @@ import { MenuHarness } from "./Menu.harness";
 /**
  * The only `.ct.tsx` outside `src/components`, deliberately.
  *
- * `menuRecipe` ships without a component — consumers build their own menu on
- * top of it — so the thing under test is the recipe, and the test sits with it.
- * Putting a `Menu.ct.tsx` in `components/` would advertise a `StyledMenu` that
- * does not exist.
+ * This tests the RECIPE, applied bare, so it sits with the recipe. Since
+ * 0.34.0 the package also ships `StyledMenu`, a menu-button component whose
+ * items are built on this recipe; its own behaviour is `StyledMenu.ct.tsx`'s.
+ * Consumers that built their own menu on `menuRecipe` (HopperGuard did) still
+ * depend on the floor asserted here.
  *
  * It has to be this tier. jsdom reports a zero-sized box for every element, so
  * a jest assertion on menu-item height agrees with any value, including the 34px

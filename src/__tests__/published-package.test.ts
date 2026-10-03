@@ -29,8 +29,19 @@ describe("the published tarball", () => {
       { cwd: repoRoot, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
     )
     // npm prints notices before the JSON even on a clean run.
-    const parsed = JSON.parse(raw.slice(raw.indexOf("[")))
-    return parsed[0].files.map((f: { path: string }) => f.path)
+    //
+    // And the JSON's SHAPE depends on the npm major: up to npm 11 it is an
+    // array of one entry per package; npm 12 made it an object keyed by
+    // package name. Slicing from the first "[" assumed the array, and under
+    // npm 12 landed on the first "[" INSIDE the object — the `files` array —
+    // so the suite died on a parse error before asserting anything. Start at
+    // whichever opens first, and accept either shape.
+    const starts = [raw.indexOf("["), raw.indexOf("{")].filter((i) => i >= 0)
+    const parsed: unknown = JSON.parse(raw.slice(Math.min(...starts)))
+    const entry = (
+      Array.isArray(parsed) ? parsed[0] : Object.values(parsed as Record<string, unknown>)[0]
+    ) as { files: { path: string }[] }
+    return entry.files.map((f) => f.path)
   })()
 
   it.each([

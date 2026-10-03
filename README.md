@@ -613,14 +613,33 @@ const tools: SidebarItem[] = [
 
 | Prop | Meaning |
 |---|---|
-| `items` | `SidebarItem[]` — `{ id, icon?, label, description?, help? }`. **Rendered exactly as given.** |
-| `selectedId` / `onSelect` | Controlled selection. `onSelect(id)` reports a choice; navigation is yours. |
+| `items` | `SidebarItem[]` — `{ id, icon?, label, description?, help?, href? }`. **Rendered exactly as given.** |
+| `selectedId` / `onSelect` | Controlled selection. `onSelect(id)` reports a choice. For a button item navigation is yours; for an `href` item the link navigates and `onSelect` is only told about an ordinary click. |
 | `overflow` | `"scroll"` (default, uses `StyledScrollbar`) or `"paging"` (previous/next + "Page 2 of 4"). |
 | `itemsPerPage` | Paging only; default 8. |
 | `collapsed` / `onCollapsedChange` | Controlled collapse. Omit the handler and no collapse control renders. |
 | `emptyState` | Rendered inside a live region when `items` is empty. |
 | `heading` | e.g. `"TOOLS"`. |
 | `aria-label` | Names the `navigation` landmark. Defaults to `"Tools"`. |
+
+### Destinations are links: `href`
+
+Give an item `href` and it renders as a real link — `<a href>`, with
+`aria-current="page"` when selected — instead of a `<button>`. A navigation
+landmark of buttons announces "button" for every destination and cannot be
+middle-clicked or opened in a new tab; a link can. It renders through the
+`linkComponent` you set on `StonedogStyleProvider` (your router's link for
+client-side navigation), or a plain `<a>` if you set none. Items without `href`
+are unchanged.
+
+```tsx
+<StonedogStyleProvider linkComponent={NextLink}>
+  <StyledSidebar
+    items={[{ id: "filings", label: "Filings", href: "/filings" }]}
+    selectedId={currentSection}
+  />
+</StonedogStyleProvider>
+```
 
 ### Ordering, filtering and the search box are **yours**, not the component's
 
@@ -713,6 +732,110 @@ guarantees below rest on.
 
 `children` is typed `ReactNode` for formatting — a unit, a `<strong>`, a line
 break. Putting a control in there defeats the only promise the component makes.
+
+## Menus — `StyledMenu`
+
+A menu button for an account menu or a switcher: a trigger that opens a short
+list of actions or destinations.
+
+```tsx
+<StyledMenu
+  label="Acme Ltd"
+  aria-label="Acme Ltd, switch organisation"
+  items={[
+    { id: "acme", label: "Acme Ltd" },
+    { id: "beta", label: "Beta LLC", description: "Delaware" },
+    { id: "new", label: "Add an organisation", href: "/organisations/new" },
+  ]}
+  currentId="acme"
+  onSelect={switchTo}
+/>
+
+// Exactly one organisation: a labelled value, nothing to operate.
+<StyledMenu locked lockedLabel="Organisation" label="Acme Ltd" items={items} currentId="acme" />
+```
+
+### What it guarantees
+
+- **The whole WAI-ARIA menu-button pattern.** `aria-haspopup`/`aria-expanded`/
+  `aria-controls` on the trigger; a press or ↓ opens on the current item, ↑ on
+  the last; ↓/↑ wrap, Home/End jump, a letter jumps to the next item starting
+  with it; the menu is one tab stop; Escape closes and returns focus to the
+  trigger; Tab, focus leaving, or a press outside all close it.
+- **The current item is marked, never disabled.** `selection="checked"` (the
+  default) makes the items `menuitemradio` with `aria-checked`;
+  `selection="current"` keeps them `menuitem` with `aria-current`. Either way a
+  check mark and bold label draw it, so it is not colour alone, and it stays
+  focusable.
+- **`href` items are links**, rendered through your `linkComponent`.
+- **48px targets** on the trigger and every item, at every text size; the menu
+  stays on a 375px screen and long names wrap.
+
+## Form fields — `StyledField`
+
+A label, optional help, the control, and an error — wired: ids, `for`,
+`aria-describedby`, `aria-invalid` and `required` are set for you.
+
+```tsx
+<StyledField label="Email" help="We send receipts here." error={errors.email} required>
+  <StyledInputText type="email" name="email" />
+</StyledField>
+
+<StyledField label="Send me reminders" kind="checkbox">
+  <input type="checkbox" name="reminders" />
+</StyledField>
+
+<StyledField label="Billing cycle" kind="group" error={errors.cycle} required>
+  <StyledInputRadio name="cycle" items={cycles} value={cycle} onChange={onCycle} />
+</StyledField>
+
+// A control that does not forward props: take the wiring and spread it.
+<StyledField label="Notes">{(control) => <MyEditor {...control} />}</StyledField>
+```
+
+### What it guarantees
+
+- **A visible label, always** — never a placeholder standing in for one. A
+  radio group gets a `<fieldset>` and `<legend>`.
+- **The control is described by its help and, while there is one, its error**,
+  and carries `aria-invalid` while it is wrong. A description the control
+  already had is kept.
+- **The error region is always in the page** (`role="alert"`, empty and taking
+  no room when there is no error), so an error appearing is announced reliably.
+- **`required` is announced by the control** (the native attribute, or
+  `aria-required` on a group) and **shown on the label** by a marker hidden from
+  screen readers, so it is not announced twice.
+
+`fieldErrorId(id)` (and `fieldHelpId(id)`) give the derived ids, for a host
+that wants to name them in server-rendered markup.
+
+## Confirming a destructive action — `StyledInlineConfirm`
+
+The trigger opens a panel beneath it: what will happen, optionally a one-time
+code, then Cancel and Confirm.
+
+```tsx
+<StyledInlineConfirm
+  triggerLabel="Remove organisation"
+  prompt="Remove Acme Ltd? Its filings are deleted, and this cannot be undone."
+  confirmLabel="Remove Acme Ltd"
+  onConfirm={() => removeOrganisation(id)}
+  stepUp={{ label: "Verification code", help: "From your authenticator app." }}  // optional
+/>
+```
+
+### What it guarantees
+
+- **Focus is never lost.** The trigger stays in the page (with `aria-expanded`
+  and `aria-controls`); opening moves focus into the panel, and Cancel, Escape
+  or a completed Confirm return it to the trigger.
+- **Cancel comes first and takes focus**, so pressing Enter twice out of habit
+  cancels rather than destroys. With a code field, the field comes first.
+- **Confirm looks destructive** — the same error surface, text and border
+  `StyledAlert status="error"` uses — and its label should name the act.
+- **An empty code is refused with a message**, not by a disabled button.
+  `onConfirm` may return a promise: Confirm shows a busy state, and a rejection
+  leaves the panel open for a retry.
 
 ## Adopting a component as it is migrated
 

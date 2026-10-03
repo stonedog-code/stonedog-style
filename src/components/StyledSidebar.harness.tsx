@@ -209,3 +209,34 @@ export function SidebarIconOnlyAtDensity({ step }: { step: DensityStep }) {
     </div>
   );
 }
+
+/**
+ * The same four tools as links (`href`). Fragment destinations, so following
+ * one in a component test changes the hash rather than unloading the harness.
+ */
+const LINKED_TOOLS: SidebarItem[] = TOOLS.map((tool) => ({ ...tool, href: `#${tool.id}` }));
+
+export function SidebarLinks() {
+  const [selectedId, setSelectedId] = React.useState("calendar");
+  return (
+    <Rail>
+      <div style={{ color: "rgb(1, 2, 3)" }} data-testid="link-colour-context">
+        <StyledSidebar items={LINKED_TOOLS} selectedId={selectedId} onSelect={setSelectedId} heading="TOOLS" />
+      </div>
+    </Rail>
+  );
+}
+
+/** Links on the §20a icon-only rail. */
+export function SidebarLinksIconOnly() {
+  return (
+    <Rail width="72px">
+      <StyledSidebar
+        items={LINKED_TOOLS}
+        selectedId="calendar"
+        defaultCollapsed
+        iconOnlyWhenCollapsed
+      />
+    </Rail>
+  );
+}

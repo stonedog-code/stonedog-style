@@ -1112,6 +1112,48 @@ pins it: passing `id` alone must leave the wrapper with **no** id, or the
 document holds two elements claiming one id and `getElementById` answers
 whichever comes first.
 
+## Links in the sidebar, a menu button, a field and an inline confirm (NEH-1816, NEH-1817, 0.34.0)
+
+All four are additive; a host that changes nothing gets the same elements,
+attributes and classes it got from 0.33.0. Four things worth knowing before changing them:
+
+- **`SidebarItem.href` renders through `useLinkComponent()`, not a per-sidebar
+  prop.** Same reasoning as `StyledLink`: the router is app-wide. The button
+  and link rows share one `cva`, and the per-state style props are written out
+  as literals on BOTH elements — a spread object is invisible to Panda, and a
+  class that happens to exist because the other element emitted it is the
+  coincidence NEH-1453 documents. `onSelect` became optional (widening); an
+  item without `href` is still the `<button>` with `aria-current="true"` it
+  always was. `color`/`textDecoration` go on the link only, because putting
+  them in the shared base would have changed HopperGuard's button icons.
+- **`StyledMenu` is built on `menuRecipe`**, which shipped component-less until
+  now. Its items layer a utility class over the recipe item, and **that class
+  restates the hover pair** next to `bg: transparent` — utilities outrank
+  recipes, so a bare transparent background silently cancels the recipe's
+  hover surface. Both the menu panel and the confirm panel use `display: flex`
+  and therefore carry `&[hidden] { display: none }`; without it a `hidden`
+  panel paints anyway, and only the component tier can see that.
+- **`StyledField` clones its one child** (or hands a function the wiring) and
+  reuses `StyledFormLabel`, `StyledFieldHelp` and `StyledFieldset`. It puts
+  `aria-describedby` on the control statically, so `StyledFieldHelp`'s
+  imperative wiring stands down rather than doubling the id. The error region
+  is mounted empty from the first render — a live region that appears with its
+  text is announced inconsistently.
+- **`StyledInlineConfirm`'s destructive paint is a utility class over the
+  `outline` button recipe, passed WITH the recipe class** — `StyledButton`
+  sets `className` itself and a caller's replaces it, so passing the
+  destructive class alone silently drops the 48px floor. The pair is the one
+  `StyledAlert status="error"` paints, and the component test compares the two
+  computed results rather than restating a colour.
+
+**No axe-core in the component tier, deliberately.** `axe-core` and
+`@axe-core/playwright` are MPL-2.0, and "What may never land here" bars
+copyleft. The accessibility assertions are Playwright's own computed
+accessible names and descriptions (`toHaveAccessibleDescription`, `getByRole`
+with `name`), each proved against a planted hand-rolled field that must fail
+(`StyledField.ct.tsx`, `StyledField.test.tsx`). Disabling the describedby
+wiring in `StyledField` fails 5 of 25 unit tests.
+
 ## A wrapper between a prop and the element it describes (NEH-1475)
 
 The section above says a component must not accept a prop it cannot honour.
