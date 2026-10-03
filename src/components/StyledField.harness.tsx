@@ -12,7 +12,12 @@ export function FieldForm() {
   const [invalid, setInvalid] = React.useState(false);
   const [cycle, setCycle] = React.useState("");
   return (
+    // `noValidate`: the harness raises its OWN errors on submit, the way a
+    // host with server-side validation does. Without it the browser's
+    // constraint validation stops the submit at the empty required field and
+    // the handler never runs.
     <form
+      noValidate
       style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: "32rem" }}
       onSubmit={(event) => {
         event.preventDefault();
