@@ -166,6 +166,8 @@ and nothing visible until someone looks at the pixels.
 | `as="ul"`/`"ol"` on any stack | `list-style: none`, `margin: 0`, `padding: 0`, `role="list"` — each overridable | new in **0.36.0** (NEH-1868), on `StyledHStack` too. A host on Panda's preflight sees no paint change |
 | `StyledHStack` / `StyledVStack` `as` TYPE | the `StackElement` union of intrinsic names | narrowed from `React.ElementType` in **0.36.0**; a component or `"table"` is now a type error. Two consumer call sites existed (`"ol"`, `"section"`), both in the union |
 | `StyledInlineConfirmStepUp` keyboard | `inputMode="text"`, `autoComplete="one-time-code"`, both overridable | changed in **0.36.0** (NEH-1858); before it `inputMode="numeric"` was hard-coded. `stepUp.inputMode: "numeric"` restores the keypad |
+| `StyledHStack` `className` | **merged** after the pattern's classes | changed in **0.37.0** (NEH-1883); before it the prop was destructured and dropped. `StyledStack direction="row"` inherits the fix; `StyledVStack` already merged. Measured: `StyledInputBool` (the only in-package caller) is pixel-identical — see the 0.37.0 notes |
+| `StyledInlineConfirm` focus after a refused `onConfirm` | the **code field** when `stepUp` is set; Confirm otherwise | changed in **0.37.0** (NEH-1887); before it focus always went to Confirm. Keyed on `stepUp`, not `stepUpError` |
 
 **0.27.0 finishes what 0.26.0 started, and the five components needed five
 different fixes because they were frozen five different ways.** "The recipe sets
@@ -1248,6 +1250,74 @@ and watching the new tests fail, then reverting.
   `stepUp` (searched `~/src`: none), and a minor on `0.x` is the opt-in per
   the ordering rule above. `autoComplete` still defaults to `one-time-code`.
   Planting the hard-coded numeric fails 2 jest and 1 ct ×4.
+
+## Stacks forward `className`; the gate reads a coloured summary; a refused step-up refocuses the code (NEH-1883, NEH-1884, NEH-1887, 0.37.0)
+
+Three follow-ups to 0.36.0, in one release so the owner publishes once. Each
+was proved by planting the 0.36.0 behaviour back and watching the new tests
+fail, then reverting.
+
+- **`StyledHStack` merges a caller's `className`** — NEH-1883. It destructured
+  the prop as `_className` and dropped it, while its type accepted it: the
+  NEH-1868 shape (`as` on `StyledVStack`) one prop along. Swept every other
+  component that destructures its props: `StyledVStack`, `StyledBox` and the
+  `styled()` wrappers already forward it; `StyledStack` forwards to the two
+  stacks, so `direction="row"` was broken and is now fixed by the same line;
+  the components that never mention `className` (`StyledSearch`,
+  `StyledInputToggle`, `StyledTabs`, …) do not accept it in their types, which
+  is a different decision rather than this defect.
+  - **What changed on screen for `StyledInputBool`: nothing, measured.** Its
+    `className={slots.root}` now lands, but the root slot declares exactly what
+    the `hstack` pattern already sets — `display: flex`, `align-items:
+    center`, `gap: 2` — and the pattern's utilities sit in a LATER cascade
+    layer (`utilities`) than `recipes.slots`, so they win regardless. Computed
+    `display`/`align-items`/`gap`/`flex-direction`/`padding`/`margin` and the
+    bounding boxes of the label, the checkbox and the text were captured at all
+    four viewports, for a long wrapping label (`solid`) and a short one
+    (`outline`), before and after: byte-identical. The only DOM difference is
+    two more classes on the `<label>` (`input-bool__root
+    input-bool__root--variant_<v>`). What it DOES change: a host that
+    restyles `inputBoolRecipe`'s root slot with a property the pattern does not
+    set now sees it apply, where before it was silently inert. The minor bump
+    is the opt-in for that, per the ordering rule.
+  - **The test cannot be a computed-style read of the label as rendered** — it
+    would pass with or without the fix, for the reason above. So
+    `StyledInputBool.ct.tsx` strips the pattern's classes and asks what is
+    left: with only the recipe's classes the label must still be a centred
+    flex row with an 8px gap, and a control step strips everything and
+    confirms a bare `<label>` computes `inline`. `StyledStack.ct.tsx` checks
+    every stack (row, column, `ul`, responsive) with a caller class setting
+    `outline-style: dashed`, a property no pattern touches.
+  - Plant (the `className` merge removed): 2 tests × 4 viewports fail.
+- **`gate-ct.sh` parses a coloured summary** — NEH-1884. With `FORCE_COLOR`
+  set (agent shells here set `FORCE_COLOR=3`) Playwright writes
+  `ESC[32m  12 passed ESC[39m`, the `^ *N passed` pattern could not match a
+  line beginning with an escape, and the gate died with "no summary line" on a
+  run where every test passed — which also blocked `npm run release`. The
+  parser and the verdict moved into `scripts/lib/ct-summary.sh`, which strips
+  ANSI escapes before matching; stripping rather than forcing `NO_COLOR` keeps
+  the coloured output for the person watching. `gate-ct-summary.test.ts`
+  drives the real shell functions: coloured and plain summaries give identical
+  counts (pinned to literal values first, so two empty answers cannot agree),
+  and an absent or empty summary still FAILS with "no summary line". Plants:
+  no stripping fails 4 of 8; bypassing the missing-summary check fails 2 of 8.
+  `public-surface-leak.test.ts` now walks `scripts/` recursively — it read only
+  the top level, so the new `lib/` helper was outside it; the first run of the
+  widened guard caught a tracker id in that helper's header.
+- **A refused step-up puts focus on the code field** — NEH-1887. After a
+  rejected `onConfirm`, focus went to Confirm, so a keyboard reader told their
+  code was wrong had to Shift+Tab back to fix it. Now, **whenever `stepUp` is
+  set**, a rejection focuses the code field by ref; without `stepUp`, Confirm,
+  unchanged. Keyed on `stepUp` rather than on `stepUpError` deliberately: the
+  host sets `stepUpError` in the same handler that rejects, so the value the
+  component's closure holds is the PREVIOUS render's — keying on it would make
+  the target depend on whether the last attempt failed. A one-time code is
+  normally single-use, Enter in the field confirms (a transient failure is one
+  key from a retry), and `StyledField`'s always-mounted alert region announces
+  the verdict wherever focus sits. Browser tier only, as with NEH-1860: the
+  plant (always Confirm) fails 2 `StyledInlineConfirm.ct.tsx` tests at all four
+  viewports and the no-step-up control passes both ways; jest has no focus
+  assertion for this on purpose.
 
 ## A wrapper between a prop and the element it describes (NEH-1475)
 

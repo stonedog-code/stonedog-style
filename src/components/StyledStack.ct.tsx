@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/experimental-ct-react";
-import { StackLists, StackListOverrides } from "./StyledStack.harness";
+import {
+  StackLists,
+  StackListOverrides,
+  StackClassNames,
+} from "./StyledStack.harness";
 
 /**
  * NEH-1868 — `StyledStack`/`StyledVStack` honour `as`, in a real browser.
@@ -118,4 +122,50 @@ test("a stack with no `as` is still a plain div — the default did not move", a
     return b!.y - (a!.y + a!.height);
   });
   expect(gap).toBeCloseTo(16, 0);
+});
+
+/**
+ * NEH-1883 — every stack forwards a caller's `className`, merged with its own.
+ *
+ * `StyledHStack` used to destructure `className` as `_className` and drop it,
+ * so `StyledInputBool`'s `className={slots.root}` never reached the DOM and the
+ * type accepted a prop the component threw away. Asserted two ways per stack:
+ * the class is ON the element, and its rule APPLIES (a computed
+ * `outline-style` no pattern sets) — while the stack's own layout survives the
+ * merge (still `display: flex`, still the right direction).
+ */
+test("a caller's className lands on every stack and its rule applies", async ({ mount }) => {
+  const component = await mount(<StackClassNames />);
+  const callerClass = (await component.getAttribute("data-caller-class")) ?? "";
+  expect(callerClass).not.toBe("");
+  const cases = [
+    ["hstack", "row"],
+    ["hstack-ul", "row"],
+    ["vstack", "column"],
+    ["stack-row", "row"],
+    ["stack-column", "column"],
+  ] as const;
+  for (const [id, direction] of cases) {
+    const el = component.getByTestId(id);
+    const observed = await el.evaluate((node) => {
+      const cs = getComputedStyle(node);
+      return {
+        classes: Array.from(node.classList),
+        outlineStyle: cs.outlineStyle,
+        display: cs.display,
+        flexDirection: cs.flexDirection,
+      };
+    });
+    expect(observed.classes, id).toEqual(
+      expect.arrayContaining(callerClass.split(" ")),
+    );
+    expect(observed.outlineStyle, id).toBe("dashed");
+    expect(observed.display, id).toBe("flex");
+    expect(observed.flexDirection, id).toBe(direction);
+  }
+  // The responsive form goes through StyledHStack when `base` is "row".
+  const responsive = await component
+    .getByTestId("stack-responsive-row")
+    .evaluate((node) => getComputedStyle(node).outlineStyle);
+  expect(responsive).toBe("dashed");
 });

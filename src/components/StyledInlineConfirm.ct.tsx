@@ -5,6 +5,7 @@ import {
   ConfirmWithBody,
   ConfirmWithTextBody,
   ConfirmStepUpModes,
+  ConfirmRefused,
 } from "./StyledInlineConfirm.harness";
 
 /**
@@ -67,6 +68,71 @@ test.describe("focus", () => {
     await page.keyboard.type("123456");
     await page.keyboard.press("Enter");
     await expect(component.getByTestId("log")).toHaveText("confirmed:123456");
+  });
+});
+
+/**
+ * NEH-1887 — after a refused `onConfirm`, where does focus go?
+ *
+ * With a step-up field: the CODE FIELD, on any rejection (0.37.0). Before it,
+ * focus always went to Confirm, so a keyboard reader told their code was wrong
+ * had to Shift+Tab back to the field to fix it. Keyed on `stepUp` rather than
+ * on `stepUpError` — see the comment at the `catch` in the component.
+ * Without a step-up, Confirm, as before. Only this tier can prove where focus
+ * lands (NEH-1860 measured a jsdom focus test passing on broken code), so
+ * there is deliberately no jsdom twin.
+ */
+test.describe("focus after a refused confirm", () => {
+  test("a refused step-up code puts focus back on the code field, with the host's verdict", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(<ConfirmRefused stepUp withError />);
+    await component.getByRole("button", { name: "Remove organisation" }).click();
+    const code = component.getByRole("textbox", { name: /Verification code/ });
+    await code.fill("000000");
+    // Activated from Confirm itself, so the focus has to MOVE to pass.
+    const confirm = component.getByRole("button", { name: "Remove Acme Ltd" });
+    await confirm.focus();
+    await page.keyboard.press("Enter");
+    await expect(component.getByTestId("attempts")).toHaveText("1");
+    await expect(code).toHaveAttribute("aria-invalid", "true");
+    await expect(code).toHaveAccessibleDescription(/did not match/);
+    await expect(code).toBeFocused();
+    // And it stays there rather than being yanked by a late frame.
+    await page.waitForTimeout(100);
+    await expect(code).toBeFocused();
+  });
+
+  test("any refusal with a step-up field refocuses the code, even without a field verdict", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(<ConfirmRefused stepUp />);
+    await component.getByRole("button", { name: "Remove organisation" }).click();
+    const code = component.getByRole("textbox", { name: /Verification code/ });
+    await code.fill("123456");
+    await component.getByRole("button", { name: "Remove Acme Ltd" }).click();
+    await expect(component.getByTestId("attempts")).toHaveText("1");
+    await expect(code).toBeFocused();
+    // Enter from the field retries, so a transient failure is one key away.
+    await page.keyboard.press("Enter");
+    await expect(component.getByTestId("attempts")).toHaveText("2");
+    await expect(code).toBeFocused();
+  });
+
+  test("without a step-up, a refusal returns focus to Confirm — unchanged", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(<ConfirmRefused />);
+    await component.getByRole("button", { name: "Remove organisation" }).click();
+    const confirm = component.getByRole("button", { name: "Remove Acme Ltd" });
+    await confirm.click();
+    await expect(component.getByTestId("attempts")).toHaveText("1");
+    await expect(confirm).toBeFocused();
+    const active = await page.evaluate(() => document.activeElement?.tagName);
+    expect(active).toBe("BUTTON");
   });
 });
 

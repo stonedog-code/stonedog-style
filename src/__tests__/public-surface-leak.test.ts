@@ -70,12 +70,18 @@ const INTERNAL_REFERENCE: { name: string; pattern: RegExp }[] = [
 /** Every file that reaches a stranger, as repo-relative paths. */
 function publishedSurface(): string[] {
   const files = ["README.md", "package.json"];
-  const scripts = join(ROOT, "scripts");
-  if (existsSync(scripts)) {
-    for (const entry of readdirSync(scripts)) {
-      if (entry.endsWith(".sh")) files.push(`scripts/${entry}`);
+  // Recursive: `scripts/lib/` holds shell the gate sources, and a guard that
+  // read only the top level would let a helper carry what its caller may not.
+  const walk = (relative: string) => {
+    const dir = join(ROOT, relative);
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = `${relative}/${entry.name}`;
+      if (entry.isDirectory()) walk(path);
+      else if (entry.name.endsWith(".sh")) files.push(path);
     }
-  }
+  };
+  walk("scripts");
   return files;
 }
 
@@ -104,6 +110,7 @@ describe("the published surface carries no internal identifiers", () => {
     expect(surface).toContain("README.md");
     expect(surface).toContain("package.json");
     expect(surface.some((f) => f.startsWith("scripts/"))).toBe(true);
+    expect(surface).toContain("scripts/lib/ct-summary.sh");
     for (const relative of surface) {
       expect(readFileSync(join(ROOT, relative), "utf8").length).toBeGreaterThan(200);
     }

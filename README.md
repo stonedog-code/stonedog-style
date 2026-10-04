@@ -835,7 +835,9 @@ code, then Cancel and Confirm.
   `StyledAlert status="error"` uses — and its label should name the act.
 - **An empty code is refused with a message**, not by a disabled button.
   `onConfirm` may return a promise: Confirm shows a busy state, and a rejection
-  leaves the panel open for a retry.
+  leaves the panel open for a retry. After a rejection focus returns to the
+  code field when there is one (0.37.0) — set `stepUpError` to say why the
+  code was refused — and to Confirm otherwise.
 
 ### A body of your own fields (0.36.0)
 

@@ -30,6 +30,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# The summary parser, ANSI-safe so a coloured run (FORCE_COLOR) parses the
+# same as a plain one. Shared with its jest test.
+# shellcheck source=lib/ct-summary.sh
+. scripts/lib/ct-summary.sh
+
 CONFIG=playwright-ct.config.ts
 INSTALL_CMD="npx playwright install chromium"
 
@@ -45,11 +50,11 @@ CT_FILES=$(find src -type f -name '*.ct.tsx' | wc -l | tr -d ' ')
 # "Total: N tests in M files". That N is what the run must account for.
 LIST_OUT=$(npx playwright test --config "$CONFIG" --list 2>&1) \
   || { printf '%s\n' "$LIST_OUT" >&2; die "could not list the component tests"; }
-LISTED=$(printf '%s\n' "$LIST_OUT" | sed -n 's/^Total: \([0-9][0-9]*\) tests in \([0-9][0-9]*\) files\?$/\1 \2/p' | tail -1)
+LISTED=$(ct_list_total <(printf '%s\n' "$LIST_OUT"))
 [ -n "$LISTED" ] || { printf '%s\n' "$LIST_OUT" >&2; die "could not read the test count from 'playwright test --list'"; }
 LISTED_TESTS=${LISTED% *}
 LISTED_FILES=${LISTED#* }
-PROJECTS=$(printf '%s\n' "$LIST_OUT" | sed -n 's/^  \[\([^]]*\)\] .*/\1/p' | sort -u | tr '\n' ' ')
+PROJECTS=$(printf '%s\n' "$LIST_OUT" | strip_ansi | sed -n 's/^  \[\([^]]*\)\] .*/\1/p' | sort -u | tr '\n' ' ')
 PROJECT_COUNT=$(printf '%s' "$PROJECTS" | wc -w | tr -d ' ')
 [ "$LISTED_FILES" -eq "$CT_FILES" ] \
   || die "found $CT_FILES *.ct.tsx files on disk but playwright listed $LISTED_FILES — testMatch or testDir has drifted"
@@ -85,19 +90,12 @@ npx playwright test --config "$CONFIG" 2>&1 | tee "$LOG"
 STATUS=${PIPESTATUS[0]}
 set -e
 
-PASSED=$(sed -n 's/^ *\([0-9][0-9]*\) passed.*/\1/p' "$LOG" | tail -1)
-FAILED=$(sed -n 's/^ *\([0-9][0-9]*\) failed.*/\1/p' "$LOG" | tail -1)
-FLAKY=$(sed -n 's/^ *\([0-9][0-9]*\) flaky.*/\1/p' "$LOG" | tail -1)
-SKIPPED=$(sed -n 's/^ *\([0-9][0-9]*\) skipped.*/\1/p' "$LOG" | tail -1)
-DID_NOT_RUN=$(sed -n 's/^ *\([0-9][0-9]*\) did not run.*/\1/p' "$LOG" | tail -1)
+# The verdict lives in scripts/lib/ct-summary.sh so its test drives the same
+# code: coloured and plain summaries must agree, and a missing one must fail.
+VERDICT_STATUS=0
+ct_verdict "$LOG" "$STATUS" "$LISTED_TESTS" || VERDICT_STATUS=$?
 rm -f "$LOG"
-
-say "result: passed=${PASSED:-0} failed=${FAILED:-0} flaky=${FLAKY:-0} skipped=${SKIPPED:-0} did-not-run=${DID_NOT_RUN:-0} of $LISTED_TESTS listed (exit $STATUS)"
-
-[ "$STATUS" -eq 0 ] || die "component tests failed (playwright exit $STATUS)"
-[ -n "$PASSED" ] || die "no summary line from playwright — cannot tell what ran"
-[ "${SKIPPED:-0}" -eq 0 ] || die "$SKIPPED component tests were skipped — a skipped test is not a passing one"
-[ "$PASSED" -eq "$LISTED_TESTS" ] \
-  || die "$PASSED passed but $LISTED_TESTS were listed — the run did not cover the set it was asked about"
+[ "$VERDICT_STATUS" -eq 0 ] || exit "$VERDICT_STATUS"
+PASSED=$CT_PASSED
 
 say "PASS: $PASSED/$LISTED_TESTS component tests in $CT_FILES files at $PROJECT_COUNT viewports"

@@ -312,4 +312,48 @@ test.describe("StyledInputBool", () => {
     // The harness theme's `--hopper-text-pop-text`.
     expect(ring).toBe("rgb(56, 189, 248)");
   });
+  /**
+   * NEH-1883 — the recipe's root slot reaches the `<label>` and its rule
+   * actually applies.
+   *
+   * Before 0.37.0 `StyledHStack` dropped `className`, so `slots.root` never
+   * landed. Measured when fixing it: nothing on screen moves, because the root
+   * slot declares exactly what the `hstack` pattern already sets (`display:
+   * flex`, `align-items: center`, `gap: 2`) and the pattern's utilities sit in
+   * a later cascade layer than `recipes.slots`. So the computed style of the
+   * label as rendered cannot tell the two apart, and an assertion on it would
+   * be green with or without the fix.
+   *
+   * The test therefore takes the pattern's classes OFF and asks what is left.
+   * With only the recipe's classes, the label must still be a centred flex row
+   * with an 8px gap — which only the root slot's rule can produce. The control
+   * step strips every class and confirms a bare `<label>` is `inline` here, so
+   * the flex reading is not something the element would have had anyway.
+   */
+  test("the recipe's root slot lands on the label and its rule applies", async ({
+    mount,
+  }) => {
+    const component = await mount(<StyledInputBool label="Send me email" />);
+    const observed = await component.evaluate((label) => {
+      const all = Array.from(label.classList);
+      const recipe = all.filter((c) => c.startsWith("input-bool__root"));
+      const read = () => {
+        const cs = getComputedStyle(label);
+        return { display: cs.display, alignItems: cs.alignItems, gap: cs.columnGap };
+      };
+      label.setAttribute("class", recipe.join(" "));
+      const recipeOnly = read();
+      label.setAttribute("class", "");
+      const bare = read();
+      label.setAttribute("class", all.join(" "));
+      return { recipe, recipeOnly, bare };
+    });
+    expect(observed.recipe).toContain("input-bool__root");
+    expect(observed.bare.display).toBe("inline");
+    expect(observed.recipeOnly).toEqual({
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+    });
+  });
 });
