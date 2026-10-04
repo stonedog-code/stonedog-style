@@ -837,6 +837,34 @@ code, then Cancel and Confirm.
   `onConfirm` may return a promise: Confirm shows a busy state, and a rejection
   leaves the panel open for a retry.
 
+### A body of your own fields (0.36.0)
+
+Children render between the prompt and the actions — a reason, a checkbox, a
+typed name. They are your controlled state; read them in `onConfirm`. Opening
+the panel focuses the body's first control (falling back to Cancel when the
+body holds none).
+
+```tsx
+<StyledInlineConfirm
+  triggerLabel="Call off meeting"
+  prompt="Call off the March board meeting?"
+  confirmLabel="Call off meeting"
+  onConfirm={() => callOff({ reason, notify })}
+>
+  <StyledField label="Reason">
+    <StyledInputText value={reason} onChange={(e) => setReason(e.target.value)} />
+  </StyledField>
+</StyledInlineConfirm>
+```
+
+### The code field's keyboard (0.36.0)
+
+`stepUp.inputMode` defaults to `"text"`, because a step-up commonly accepts a
+recovery code with letters or a password as well as a TOTP. Pass
+`inputMode: "numeric"` for a digits-only field, and `autoComplete` (default
+`"one-time-code"`) — e.g. `"current-password"` — when the field takes a
+password.
+
 ## Adopting a component as it is migrated
 
 Components move out of HopperGuard into this package one at a time.
