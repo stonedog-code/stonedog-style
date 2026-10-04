@@ -265,9 +265,20 @@ export function StyledInlineConfirm({
       setBusy(false);
     } catch {
       // Stay open: the reader can retry or cancel. The host says what failed.
-      // Busy disabled Confirm, which drops focus; put it back once enabled.
       setBusy(false);
-      requestAnimationFrame(() => confirmRef.current?.focus());
+      // With a step-up field, focus goes to the CODE FIELD on any rejection
+      // (NEH-1887, 0.37.0) — the next thing the reader does is type a code,
+      // and a refused one-time code cannot be resubmitted anyway. Keyed on
+      // `stepUp`, not on `stepUpError`: the host sets that prop in the same
+      // handler that rejects, so the value this closure holds is the previous
+      // render's, and keying on it would make the target depend on whether
+      // the LAST attempt failed. Enter in the field confirms, so a transient
+      // failure is still one key from a retry, and the verdict is announced by
+      // `StyledField`'s always-mounted alert region wherever focus sits.
+      // Without a step-up, Confirm: the 0.35.0 behaviour, unchanged.
+      requestAnimationFrame(() =>
+        (stepUp ? codeRef.current : confirmRef.current)?.focus(),
+      );
     }
   };
 

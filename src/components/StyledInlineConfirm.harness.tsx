@@ -127,3 +127,39 @@ export function ConfirmStepUpModes() {
 }
 
 export default ConfirmRemove;
+
+/**
+ * A host whose `onConfirm` refuses (NEH-1887). With `withError`, it does what
+ * optima's step-up panels do on a wrong code: set `stepUpError` in the same
+ * handler, then reject. Without it, the rejection carries no field verdict —
+ * a transient failure. The rejection is deferred so Confirm really goes busy
+ * (and loses then regains its enabled state) before focus is decided.
+ */
+export function ConfirmRefused({
+  stepUp = false,
+  withError = false,
+}: {
+  stepUp?: boolean;
+  withError?: boolean;
+}) {
+  const [error, setError] = React.useState<string | undefined>(undefined);
+  const [attempts, setAttempts] = React.useState(0);
+  return (
+    <div style={{ maxWidth: "36rem" }}>
+      <StyledInlineConfirm
+        triggerLabel="Remove organisation"
+        prompt="Remove Acme Ltd? This cannot be undone."
+        confirmLabel="Remove Acme Ltd"
+        onConfirm={async () => {
+          setAttempts((n) => n + 1);
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          if (withError) setError("That code did not match. Try a new one.");
+          throw new Error("refused");
+        }}
+        {...(stepUp ? { stepUp: { label: "Verification code" } } : {})}
+        {...(error !== undefined ? { stepUpError: error } : {})}
+      />
+      <p data-testid="attempts">{attempts}</p>
+    </div>
+  );
+}

@@ -2,7 +2,7 @@ import React from "react";
 import { hstack } from "styled-system/patterns";
 import type { ConditionalValue } from "styled-system/types";
 import { Property } from "csstype";
-import { css } from "styled-system/css";
+import { css, cx } from "styled-system/css";
 import { isListElement, listStackReset, type StackElement } from "./stack-element";
 
 export interface StyledHStackProps
@@ -83,7 +83,7 @@ export const StyledHStack: React.FC<StyledHStackProps> = ({
   opacity,
   color,
   _dark,
-  className: _className,
+  className,
   style: _style,
   ...rest
 }) => {
@@ -144,7 +144,17 @@ export const StyledHStack: React.FC<StyledHStackProps> = ({
     <Component
       // A list merges its reset BEFORE the caller's props in one `css()`
       // call, so a caller's `listStyle`/`p`/`mt` replaces the reset's value.
-      className={isList ? css(listStackReset, hstack.raw(patternProps)) : hstack(patternProps)}
+      //
+      // The caller's `className` is merged AFTER the pattern's (NEH-1883,
+      // 0.37.0). It used to be destructured as `_className` and dropped, so
+      // `StyledInputBool`'s `className={slots.root}` never reached its
+      // `<label>` and the type accepted a prop the component threw away —
+      // the same shape as NEH-1868's ignored `as`. `StyledVStack` already
+      // merged it; `StyledStack direction="row"` inherits this fix.
+      className={cx(
+        isList ? css(listStackReset, hstack.raw(patternProps)) : hstack(patternProps),
+        className,
+      )}
       style={_style}
       // Safari drops list semantics from a `list-style: none` list, so the
       // role is restated. A caller's own `role` (in `htmlAttrs`) still wins.
