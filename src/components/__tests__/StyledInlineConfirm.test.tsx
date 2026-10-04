@@ -153,3 +153,90 @@ describe("StyledInlineConfirm — step-up code", () => {
     expect(code.getAttribute("aria-describedby")).toBeTruthy();
   });
 });
+
+describe("StyledInlineConfirm — body slot (NEH-1852)", () => {
+  function WithBody({
+    onConfirm,
+    ...props
+  }: Partial<React.ComponentProps<typeof StyledInlineConfirm>>) {
+    const [reason, setReason] = React.useState("");
+    return (
+      <StyledInlineConfirm
+        triggerLabel="Call off"
+        prompt="Call off the meeting?"
+        {...props}
+        onConfirm={(details) => onConfirm?.({ ...details, reason } as never)}
+      >
+        <label>
+          Reason
+          <input value={reason} onChange={(e) => setReason(e.target.value)} />
+        </label>
+      </StyledInlineConfirm>
+    );
+  }
+
+  it("renders the body between the prompt and the actions, inside the panel", async () => {
+    const user = userEvent.setup();
+    render(<WithBody onConfirm={jest.fn()} />);
+    await user.click(screen.getByTestId("inline-confirm-trigger"));
+    const panel = screen.getByTestId("inline-confirm-panel");
+    const body = screen.getByTestId("inline-confirm-body");
+    expect(panel).toContainElement(body);
+    const prompt = screen.getByText("Call off the meeting?");
+    const cancel = screen.getByTestId("inline-confirm-cancel");
+    // DOCUMENT_POSITION_FOLLOWING === 4
+    expect(prompt.compareDocumentPosition(body) & 4).toBeTruthy();
+    expect(body.compareDocumentPosition(cancel) & 4).toBeTruthy();
+  });
+
+  it("the caller's own state is what the confirm handler reads", async () => {
+    const user = userEvent.setup();
+    const onConfirm = jest.fn();
+    render(<WithBody onConfirm={onConfirm} />);
+    await user.click(screen.getByTestId("inline-confirm-trigger"));
+    await user.keyboard("No quorum");
+    await user.click(screen.getByTestId("inline-confirm-confirm"));
+    expect(onConfirm).toHaveBeenCalledWith({ reason: "No quorum" });
+  });
+
+  it("renders no body wrapper when there are no children", () => {
+    setup();
+    expect(screen.queryByTestId("inline-confirm-body")).not.toBeInTheDocument();
+  });
+
+  it("an empty step-up code refocuses the code field, not the body's input", async () => {
+    const user = userEvent.setup();
+    render(<WithBody onConfirm={jest.fn()} stepUp={{ label: "Verification code" }} />);
+    await user.click(screen.getByTestId("inline-confirm-trigger"));
+    await user.click(screen.getByTestId("inline-confirm-confirm"));
+    expect(screen.getByRole("textbox", { name: /Verification code/ })).toHaveFocus();
+  });
+});
+
+describe("StyledInlineConfirm — step-up keyboard (NEH-1858)", () => {
+  it("defaults to a text keyboard, so a recovery code or password can be typed", async () => {
+    const { user, trigger } = setup({ stepUp: { label: "Code" } });
+    await user.click(trigger);
+    const code = screen.getByRole("textbox", { name: /Code/ });
+    expect(code).toHaveAttribute("inputmode", "text");
+    expect(code).toHaveAttribute("autocomplete", "one-time-code");
+  });
+
+  it("takes inputMode and autoComplete from the caller", async () => {
+    const { user, trigger } = setup({
+      stepUp: { label: "Code", inputMode: "numeric", autoComplete: "current-password" },
+    });
+    await user.click(trigger);
+    const code = screen.getByRole("textbox", { name: /Code/ });
+    expect(code).toHaveAttribute("inputmode", "numeric");
+    expect(code).toHaveAttribute("autocomplete", "current-password");
+  });
+
+  it("accepts letters — the code reaches onConfirm verbatim", async () => {
+    const { user, trigger, onConfirm } = setup({ stepUp: { label: "Code" } });
+    await user.click(trigger);
+    await user.keyboard("ABCD-2345");
+    await user.click(screen.getByTestId("inline-confirm-confirm"));
+    expect(onConfirm).toHaveBeenCalledWith({ code: "ABCD-2345" });
+  });
+});

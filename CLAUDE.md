@@ -162,6 +162,10 @@ and nothing visible until someone looks at the pixels.
 | `button link` hover / active | the colour does not change; the underline thickens | changed in **0.33.0** (NEH-1788); before it they took `buttonTextAccent` / `buttonTextSecondary` over no painted surface — white on white in a light theme |
 | `form outline` hover, `menu` item hover | state `textAccent` with the `boxBgAccent` they paint | changed in **0.33.0** (NEH-1788); before it the text rode its resting colour onto the accent surface |
 | `StyledButton loading` | `aria-disabled="true"` + `aria-busy="true"` + a click guard; the `disabled` property is NOT set, so the button keeps the focus | changed in **0.35.0** (NEH-1860); before it `loading` set `disabled`, and Chrome dropped the focus to `<body>` when the pressed button went busy. The explicit `disabled` prop is unchanged. A busy button's hover cursor is `progress`, not `pointer`; its paint is otherwise identical |
+| `StyledVStack` / `StyledStack` `as` | **honoured** — `as="ul"` renders a `<ul>` | changed in **0.36.0** (NEH-1868); before it `StyledVStack` ignored `as` and rendered `<div as="ul">`. With no `as` the output is byte-identical (a `div`, same classes) |
+| `as="ul"`/`"ol"` on any stack | `list-style: none`, `margin: 0`, `padding: 0`, `role="list"` — each overridable | new in **0.36.0** (NEH-1868), on `StyledHStack` too. A host on Panda's preflight sees no paint change |
+| `StyledHStack` / `StyledVStack` `as` TYPE | the `StackElement` union of intrinsic names | narrowed from `React.ElementType` in **0.36.0**; a component or `"table"` is now a type error. Two consumer call sites existed (`"ol"`, `"section"`), both in the union |
+| `StyledInlineConfirmStepUp` keyboard | `inputMode="text"`, `autoComplete="one-time-code"`, both overridable | changed in **0.36.0** (NEH-1858); before it `inputMode="numeric"` was hard-coded. `stepUp.inputMode: "numeric"` restores the keypad |
 
 **0.27.0 finishes what 0.26.0 started, and the five components needed five
 different fixes because they were frozen five different ways.** "The recipe sets
@@ -1184,6 +1188,66 @@ it belongs here.
   stated under `_hover` too because the hover's `pointer` would otherwise win.
 - `toBeDisabled()` (jest-dom and Playwright) reads the property, so it is now
   FALSE for a loading button; assert `aria-disabled` instead.
+
+## Stacks honour `as`; the inline confirm grows a body and a text keyboard (NEH-1868, NEH-1852, NEH-1858, 0.36.0)
+
+Three upstream halves of optima-cloud-saas workarounds, in one release so the
+owner publishes once. Each was proved by planting the 0.35.0 behaviour back
+and watching the new tests fail, then reverting.
+
+- **`StyledVStack` (and therefore `StyledStack`) honours `as`** — NEH-1868.
+  `StyledHStack` always read it; `StyledVStack` did not, `StyledStack` (a
+  column by default) forwards to it, and the props type — inherited from
+  `StyledHStack`, with its `[key: string]: unknown` — accepted it silently. So
+  `<StyledStack as="ul">` rendered `<div as="ul">` and every `<li>` was
+  orphaned; CI's axe on the optima meeting page reported `listitem`. Now:
+  - `as` is typed as **`StackElement`** (`src/components/stack-element.ts`,
+    exported), a union of intrinsic names, on both `StyledHStack` and
+    `StyledVStack`. A component or `"table"` is a type error, which
+    `layout.test.tsx` pins with two `@ts-expect-error` lines that `tsc` fails
+    on if they ever stop erroring. The union includes `"label"` because
+    `StyledInputBool` renders its root `as="label"` — the narrowing found it.
+  - `ul`/`ol` get `listStackReset` (`list-style: none; margin: 0; padding: 0`)
+    merged **before** the caller's props in ONE `css()` call, so a caller's
+    `p`/`px`/`mt`/`listStyle` replaces the reset's value instead of racing it
+    as a second class on the same property. Measured: `mt="4" px="4"` computes
+    16px over the reset's 0 (Panda orders the longhand after the shorthand).
+    `role="list"` is restated, as `StyledList` does, because Safari drops list
+    semantics from a `list-style: none` list; a caller's own `role` wins.
+  - The reset is a `css.raw` literal so Panda extracts it. **`gate:ct` runs
+    `panda:build` first for a reason**: running Playwright directly against a
+    `styles.css` built before the reset existed failed 8 tests that pass on a
+    fresh build — a stale-stylesheet red, not a code red.
+  - Plant (0.35.0's `StyledVStack.tsx` restored): 6 of 50 jest tests in
+    `layout.test.tsx`, and 2 of 5 `StyledStack.ct.tsx` tests at all four
+    viewports (the list semantics and the reset; gap/direction and the
+    no-`as` default pass either way, as they should).
+- **`StyledInlineConfirm` body slot** — NEH-1852. `children` render in a
+  `-body` wrapper between the prompt and the step-up field. They are the
+  caller's controlled state; the component renders them and nothing more. On
+  open, focus goes to the body's FIRST focusable control, falling back to the
+  panel's first (code field, else Cancel) when the body has none — so a body
+  that is only a paragraph keeps the "second Enter cancels" guarantee. The
+  empty-code refocus now uses a ref to the code input; 0.35.0's
+  `querySelector("input")` would have landed on the BODY's first input.
+  - **The browser tier is the proof of where focus lands**; the jsdom suite
+    deliberately has no body-focus assertion (NEH-1860 measured a jsdom focus
+    test passing on broken code). Planting "focus always goes to Cancel" fails
+    5 `StyledInlineConfirm.ct.tsx` tests at every viewport (the 3 body-focus
+    tests, plus the two step-up tests that expect the code field first); jest
+    goes red there too, but only indirectly — 4 tests whose typed input lands
+    on Cancel instead of a field.
+    Planting "no body rendered" fails 4 ct tests ×4 and 2 jest; planting the
+    old `querySelector("input")` refocus fails 1 ct ×4 and 1 jest.
+- **`StyledInlineConfirmStepUp.inputMode` / `.autoComplete`** — NEH-1858.
+  **The default moved from `numeric` to `text`, deliberately.** optima's
+  step-ups accept a TOTP, a recovery code with letters, or the password; a
+  digit keypad cannot type two of the three. The failure modes are
+  asymmetric: a wrong numeric default locks a phone user out, a wrong text
+  default costs a TOTP-only host one keyboard switch. No consumer used
+  `stepUp` (searched `~/src`: none), and a minor on `0.x` is the opt-in per
+  the ordering rule above. `autoComplete` still defaults to `one-time-code`.
+  Planting the hard-coded numeric fails 2 jest and 1 ct ×4.
 
 ## A wrapper between a prop and the element it describes (NEH-1475)
 

@@ -13,8 +13,8 @@ import { useDisclosure } from "./useDisclosure";
 
 /**
  * A destructive action that asks first, in place: the trigger opens a small
- * panel beneath it — what will happen, optionally a step-up code, and Cancel /
- * Confirm.
+ * panel beneath it — what will happen, optionally a body of the caller's own
+ * controls and a step-up code, and Cancel / Confirm.
  *
  * ```tsx
  * <StyledInlineConfirm
@@ -55,13 +55,31 @@ import { useDisclosure } from "./useDisclosure";
  * rather than re-deriving it is what keeps this and every other disclosure in
  * the package agreeing.
  *
+ * ## The body slot (NEH-1852, 0.36.0)
+ *
+ * `children` render between the prompt and the step-up field — a reason
+ * field, an "email the board" checkbox, the typed account name a deletion
+ * asks for. They are the CALLER's controlled state: this component renders
+ * them and nothing more, so `onConfirm` reads their values from wherever the
+ * caller keeps them. With a body, focus on open lands on the body's FIRST
+ * focusable control rather than Cancel; a body with nothing focusable (a
+ * paragraph of consequences) falls back to the panel's first control, as
+ * before. Escape and Cancel still return focus to the trigger.
+ *
  * ## The step-up slot
  *
- * `stepUp` adds a one-time-code field (`autocomplete="one-time-code"`,
- * numeric keyboard) wired through `StyledField`. An empty code is refused with
- * a message, never by disabling Confirm — a disabled button explains nothing
- * and is skipped by Tab. `stepUpError` shows the host's own verdict
- * ("That code did not match").
+ * `stepUp` adds a code field wired through `StyledField`. An empty code is
+ * refused with a message, never by disabling Confirm — a disabled button
+ * explains nothing and is skipped by Tab. `stepUpError` shows the host's own
+ * verdict ("That code did not match").
+ *
+ * **The keyboard is TEXT by default, as of 0.36.0 (NEH-1858).** Before it the
+ * field was hard-coded `inputMode="numeric"`, and a step-up commonly accepts a
+ * recovery code with letters or the account password — which a phone's digit
+ * keypad cannot type. A wrong numeric default locks a reader out; a wrong text
+ * default costs a TOTP-only host one keyboard switch. `stepUp.inputMode =
+ * "numeric"` restores the old keypad for a host that accepts digits only.
+ * `stepUp.autoComplete` defaults to `"one-time-code"`.
  */
 
 export interface StyledInlineConfirmStepUp {
@@ -71,6 +89,17 @@ export interface StyledInlineConfirmStepUp {
   help?: React.ReactNode;
   /** Said when Confirm is pressed with the field empty. */
   emptyMessage?: string;
+  /**
+   * The virtual keyboard. Default `"text"` (0.36.0, NEH-1858) — a step-up may
+   * accept a recovery code with letters or a password. Pass `"numeric"` when
+   * the field takes digits only.
+   */
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"] | undefined;
+  /**
+   * The field's `autocomplete` token. Default `"one-time-code"`; a field that
+   * takes the account password says `"current-password"`.
+   */
+  autoComplete?: string | undefined;
 }
 
 export interface StyledInlineConfirmProps {
@@ -101,7 +130,13 @@ export interface StyledInlineConfirmProps {
   stepUpError?: React.ReactNode;
   /** What Confirm says while `onConfirm` is pending. Default `"Working"`. */
   busyLabel?: React.ReactNode;
-  /** Prefix for `data-testid`s: `-trigger`, `-panel`, `-confirm`, `-cancel`, `-code`. */
+  /**
+   * The body (NEH-1852, 0.36.0): rendered between the prompt and the step-up
+   * field. Focus on open lands on its first focusable control. Its values are
+   * the caller's own state; read them in `onConfirm`.
+   */
+  children?: React.ReactNode;
+  /** Prefix for `data-testid`s: `-trigger`, `-panel`, `-body`, `-confirm`, `-cancel`, `-code`. */
   "data-testid"?: string | undefined;
 }
 
@@ -148,12 +183,16 @@ const Panel = styled("div", {
   },
 });
 
+const Body = styled("div", {
+  base: { display: "flex", flexDirection: "column", gap: "3" },
+});
+
 const Actions = styled("div", {
   base: { display: "flex", flexWrap: "wrap", gap: "2" },
 });
 
 const FOCUSABLE =
-  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function StyledInlineConfirm({
   triggerLabel,
@@ -167,6 +206,7 @@ export function StyledInlineConfirm({
   stepUp,
   stepUpError,
   busyLabel = "Working",
+  children,
   "data-testid": testId = "inline-confirm",
 }: StyledInlineConfirmProps) {
   const { open, setOpen, triggerProps, contentProps } = useDisclosure();
@@ -174,6 +214,9 @@ export function StyledInlineConfirm({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const confirmRef = useRef<HTMLButtonElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const codeRef = useRef<HTMLInputElement | null>(null);
+  const hasBody = children !== undefined && children !== null && children !== false;
   const [code, setCode] = useState("");
   const [emptyCode, setEmptyCode] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -183,7 +226,12 @@ export function StyledInlineConfirm({
   // hidden element cannot take focus — hence an effect, not the click handler.
   useEffect(() => {
     if (open && !wasOpen.current) {
-      panelRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+      // The body's first control when there is one (NEH-1852); otherwise the
+      // panel's first — the code field, or Cancel.
+      const target =
+        bodyRef.current?.querySelector<HTMLElement>(FOCUSABLE) ??
+        panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
+      target?.focus();
     }
     wasOpen.current = open;
   }, [open]);
@@ -203,7 +251,9 @@ export function StyledInlineConfirm({
   const confirm = async () => {
     if (stepUp && code.trim() === "") {
       setEmptyCode(true);
-      panelRef.current?.querySelector<HTMLElement>("input")?.focus();
+      // The code field by ref: with a body, the panel's first `input` may be
+      // the caller's, not this one.
+      codeRef.current?.focus();
       return;
     }
     setBusy(true);
@@ -251,6 +301,11 @@ export function StyledInlineConfirm({
         <StyledText id={promptId} block>
           {prompt}
         </StyledText>
+        {hasBody && (
+          <Body ref={bodyRef} data-testid={`${testId}-body`}>
+            {children}
+          </Body>
+        )}
         {stepUp && (
           <StyledField
             label={stepUp.label}
@@ -259,6 +314,7 @@ export function StyledInlineConfirm({
             required
           >
             <StyledInputText
+              ref={codeRef}
               value={code}
               onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
                 setCode(event.target.value);
@@ -270,8 +326,8 @@ export function StyledInlineConfirm({
                   void confirm();
                 }
               }}
-              autoComplete="one-time-code"
-              inputMode="numeric"
+              autoComplete={stepUp.autoComplete ?? "one-time-code"}
+              inputMode={stepUp.inputMode ?? "text"}
               data-testid={`${testId}-code`}
             />
           </StyledField>

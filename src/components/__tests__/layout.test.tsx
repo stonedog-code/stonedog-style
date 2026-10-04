@@ -175,3 +175,68 @@ describe("StyledSeparator", () => {
     );
   });
 });
+
+/**
+ * NEH-1868. `StyledVStack` never read `as`, and `StyledStack` (a column by
+ * default) forwards to it — so `<StyledStack as="ul">` rendered
+ * `<div as="ul">` with every `<li>` orphaned. Element and role are jsdom-safe
+ * facts; the layout half (gap, reset, a caller's spacing winning) is measured
+ * in `StyledStack.ct.tsx`.
+ */
+describe.each([
+  ["StyledVStack", StyledVStack],
+  ["StyledHStack", StyledHStack],
+  ["StyledStack", StyledStack],
+] as const)("%s as", (_name, Stack) => {
+  it.each(["ul", "ol"] as const)("as=%s renders that list, whose items are its children", (tag) => {
+    const { container } = render(
+      <Stack as={tag} data-testid="stack">
+        <li>one</li>
+        <li>two</li>
+      </Stack>,
+    );
+    const root = container.firstChild as HTMLElement;
+    expect(root.tagName).toBe(tag.toUpperCase());
+    expect(root).not.toHaveAttribute("as");
+    expect(screen.getByRole("list")).toBe(root);
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    // Restated because Safari strips list semantics from `list-style: none`.
+    expect(root).toHaveAttribute("role", "list");
+  });
+
+  it("a caller's own role wins over the restated list role", () => {
+    const { container } = render(
+      <Stack as="ul" role="menu">
+        <li role="none">x</li>
+      </Stack>,
+    );
+    expect(container.firstChild).toHaveAttribute("role", "menu");
+  });
+
+  it("renders a div with no role and no stray attribute when `as` is omitted", () => {
+    const { container } = render(<Stack>x</Stack>);
+    const root = container.firstChild as HTMLElement;
+    expect(root.tagName).toBe("DIV");
+    expect(root).not.toHaveAttribute("as");
+    expect(root).not.toHaveAttribute("role");
+  });
+
+  it("renders a non-list element without the list reset", () => {
+    const { container } = render(<Stack as="section">x</Stack>);
+    const root = container.firstChild as HTMLElement;
+    expect(root.tagName).toBe("SECTION");
+    expect(root.className).not.toContain("li-s_none");
+  });
+});
+
+describe("StackElement typing", () => {
+  it("refuses an element a stack cannot be, at compile time", () => {
+    const Custom = () => null;
+    // These lines are the test: `tsc` fails the gate if either stops erroring.
+    // @ts-expect-error — a table is not a flex container of arbitrary children.
+    const table = <StyledStack as="table" />;
+    // @ts-expect-error — a component is not an intrinsic element name.
+    const component = <StyledVStack as={Custom} />;
+    expect([table, component]).toHaveLength(2);
+  });
+});
