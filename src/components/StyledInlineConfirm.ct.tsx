@@ -1,5 +1,11 @@
 import { test, expect } from "@playwright/experimental-ct-react";
-import { ConfirmRemove, ConfirmBesideAlert } from "./StyledInlineConfirm.harness";
+import {
+  ConfirmRemove,
+  ConfirmBesideAlert,
+  ConfirmWithBody,
+  ConfirmWithTextBody,
+  ConfirmStepUpModes,
+} from "./StyledInlineConfirm.harness";
 
 /**
  * StyledInlineConfirm in a real browser: where focus actually goes (jsdom's
@@ -112,5 +118,104 @@ test.describe("targets and paint", () => {
     });
     expect(hovered.bg).toBe(rest);
     expect(hovered.shadow).not.toBe("none");
+  });
+});
+
+test.describe("body slot (NEH-1852)", () => {
+  test("open lands on the body's first control; the values reach the confirm handler", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(<ConfirmWithBody />);
+    const trigger = component.getByRole("button", { name: "Call off meeting" }).first();
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    const panel = component.getByRole("group", { name: /Call off the March board meeting\?/ });
+    await expect(panel).toBeVisible();
+    const reason = panel.getByRole("textbox", { name: "Reason" });
+    await expect(reason).toBeFocused();
+
+    // The body sits between the prompt and the actions, in reading order.
+    const order = await panel.evaluate((el) => {
+      const text = el.textContent ?? "";
+      return [
+        text.indexOf("Call off the March"),
+        text.indexOf("Reason"),
+        text.indexOf("Cancel"),
+      ];
+    });
+    expect(order[0]!).toBeLessThan(order[1]!);
+    expect(order[1]!).toBeLessThan(order[2]!);
+
+    await page.keyboard.type("Quorum not met");
+    await page.keyboard.press("Tab");
+    await expect(panel.getByRole("checkbox", { name: "Email the board" })).toBeFocused();
+    await page.keyboard.press("Space");
+    await panel.getByRole("button", { name: "Call off meeting" }).click();
+    await expect(component.getByTestId("log")).toHaveText("confirmed:Quorum not met:notify");
+    await expect(trigger).toBeFocused();
+  });
+
+  test("Escape from inside the body returns focus to the trigger", async ({ mount, page }) => {
+    const component = await mount(<ConfirmWithBody />);
+    const trigger = component.getByTestId("inline-confirm-trigger");
+    await trigger.click();
+    await expect(component.getByRole("textbox", { name: "Reason" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(component.getByTestId("inline-confirm-panel")).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(component.getByTestId("log")).toHaveText("cancelled");
+  });
+
+  test("a body with nothing focusable leaves focus on Cancel, as before", async ({ mount }) => {
+    const component = await mount(<ConfirmWithTextBody />);
+    await component.getByRole("button", { name: "Archive" }).click();
+    await expect(component.getByText("Archived filings stay searchable")).toBeVisible();
+    await expect(component.getByRole("button", { name: "Cancel" })).toBeFocused();
+  });
+
+  test("with a body AND a step-up, the body leads and an empty code refocuses the CODE field", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(<ConfirmWithBody stepUp />);
+    await component.getByTestId("inline-confirm-trigger").click();
+    await expect(component.getByRole("textbox", { name: "Reason" })).toBeFocused();
+    await component.getByTestId("inline-confirm-confirm").click();
+    const code = component.getByRole("textbox", { name: /Verification code/ });
+    await expect(code).toBeFocused();
+    await expect(code).toHaveAttribute("aria-invalid", "true");
+    await page.keyboard.type("A1B2-C3D4");
+    await page.keyboard.press("Enter");
+    await expect(component.getByTestId("log")).toHaveText("confirmed::quiet:A1B2-C3D4");
+  });
+});
+
+test.describe("step-up keyboard (NEH-1858)", () => {
+  test("defaults to a text keyboard; numeric and autocomplete are the caller's to choose", async ({
+    mount,
+  }) => {
+    const component = await mount(<ConfirmStepUpModes />);
+    const read = async (id: string, trigger: string, field: RegExp) => {
+      await component.getByRole("button", { name: trigger }).click();
+      const input = component.getByTestId(id).getByRole("textbox", { name: field });
+      await expect(input).toBeFocused();
+      return {
+        inputMode: await input.evaluate((el) => (el as HTMLInputElement).inputMode),
+        autocomplete: await input.getAttribute("autocomplete"),
+      };
+    };
+    expect(await read("default", "Default step-up", /Code, recovery code or password/)).toEqual({
+      inputMode: "text",
+      autocomplete: "one-time-code",
+    });
+    expect(await read("numeric", "Numeric step-up", /Six-digit code/)).toEqual({
+      inputMode: "numeric",
+      autocomplete: "one-time-code",
+    });
+    expect(await read("password", "Password step-up", /Password/)).toEqual({
+      inputMode: "text",
+      autocomplete: "current-password",
+    });
   });
 });

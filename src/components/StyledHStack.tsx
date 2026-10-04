@@ -2,10 +2,18 @@ import React from "react";
 import { hstack } from "styled-system/patterns";
 import type { ConditionalValue } from "styled-system/types";
 import { Property } from "csstype";
+import { css } from "styled-system/css";
+import { isListElement, listStackReset, type StackElement } from "./stack-element";
 
 export interface StyledHStackProps
   extends Omit<React.HTMLAttributes<HTMLDivElement>, "color"> {
-  as?: React.ElementType | undefined;
+  /**
+   * The element to render (default `"div"`). Narrowed from
+   * `React.ElementType` in 0.36.0 (NEH-1868) so an unsupported element is a
+   * type error rather than a silent attribute. `"ul"`/`"ol"` drop the
+   * user-agent's markers, indent and margin and keep `role="list"`.
+   */
+  as?: StackElement | undefined;
   gap?: ConditionalValue<string | number> | undefined;
   align?: ConditionalValue<string> | undefined;
   justify?: ConditionalValue<string> | undefined;
@@ -129,10 +137,18 @@ export const StyledHStack: React.FC<StyledHStackProps> = ({
     (key) => mappedProps[key] === undefined && delete mappedProps[key],
   );
 
+  const patternProps = mappedProps as Parameters<typeof hstack>[0];
+  const isList = isListElement(Component);
+
   return (
     <Component
-      className={hstack(mappedProps as Parameters<typeof hstack>[0])}
+      // A list merges its reset BEFORE the caller's props in one `css()`
+      // call, so a caller's `listStyle`/`p`/`mt` replaces the reset's value.
+      className={isList ? css(listStackReset, hstack.raw(patternProps)) : hstack(patternProps)}
       style={_style}
+      // Safari drops list semantics from a `list-style: none` list, so the
+      // role is restated. A caller's own `role` (in `htmlAttrs`) still wins.
+      {...(isList ? { role: "list" } : {})}
       {...htmlAttrs}
     >
       {children}

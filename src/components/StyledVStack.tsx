@@ -1,12 +1,20 @@
 import React from "react";
 import { vstack } from "styled-system/patterns";
 import type { ConditionalValue } from "styled-system/types";
-import { cx } from "styled-system/css";
+import { css, cx } from "styled-system/css";
 import { stripedRecipe } from "styled-system/recipes";
 import { Property } from "csstype";
+import { isListElement, listStackReset, type StackElement } from "./stack-element";
 
 export interface StyledVStackProps
   extends React.HTMLAttributes<HTMLDivElement> {
+  /**
+   * The element to render (default `"div"`). `"ul"`/`"ol"` drop the
+   * user-agent's markers, indent and margin and keep `role="list"` (NEH-1868).
+   * Before 0.36.0 this prop was IGNORED here — `as="ul"` rendered
+   * `<div as="ul">` and orphaned every `<li>` inside.
+   */
+  as?: StackElement | undefined;
   opacity?: ConditionalValue<number> | undefined;
   gap?: ConditionalValue<string | number> | undefined;
   align?: ConditionalValue<string> | undefined;
@@ -48,6 +56,7 @@ export interface StyledVStackProps
 }
 
 export const StyledVStack: React.FC<StyledVStackProps> = ({
+  as: Component = "div",
   gap = "2",
   align,
   justify,
@@ -125,16 +134,29 @@ export const StyledVStack: React.FC<StyledVStackProps> = ({
     (key) => mappedProps[key as keyof typeof mappedProps] === undefined && delete mappedProps[key as keyof typeof mappedProps],
   );
 
+  const patternProps = mappedProps as unknown as Parameters<typeof vstack>[0];
+  // The union is checked at the call site; inside, every member takes the
+  // same HTML attributes, which JSX cannot see through a union of tags.
+  const Element = Component as React.ElementType;
+  const isList = isListElement(Component);
   const combinedClassName = cx(
-    vstack(mappedProps as unknown as Parameters<typeof vstack>[0]),
+    // A list merges its reset BEFORE the caller's props in one `css()` call,
+    // so a caller's own `p`/`mt`/… replaces the reset's value rather than
+    // racing it as a second class on the same property.
+    isList ? css(listStackReset, vstack.raw(patternProps)) : vstack(patternProps),
     isStriped ? stripedRecipe() : undefined,
     className,
   );
-  const { ...divProps } = rest;
   return (
-    <div className={combinedClassName} {...divProps}>
+    <Element
+      className={combinedClassName}
+      // Safari drops list semantics from a `list-style: none` list, so the
+      // role is restated. A caller's own `role` (in `rest`) still wins.
+      {...(isList ? { role: "list" } : {})}
+      {...rest}
+    >
       {children}
-    </div>
+    </Element>
   );
 };
 
