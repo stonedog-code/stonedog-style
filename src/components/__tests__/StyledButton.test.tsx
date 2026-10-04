@@ -84,7 +84,7 @@ describe("StyledButton", () => {
       expect(screen.getByText("Saving your note")).toBeInTheDocument();
     });
 
-    it("disables the button so a second submit cannot fire", async () => {
+    it("refuses a click so a second submit cannot fire", async () => {
       // The classic double-charge bug. A loading button that stays clickable is
       // the whole reason this behaviour exists.
       const onClick = jest.fn();
@@ -94,9 +94,99 @@ describe("StyledButton", () => {
         </StyledButton>,
       );
       const button = screen.getByRole("button");
-      expect(button).toBeDisabled();
       await userEvent.click(button);
       expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it("is aria-disabled, NOT disabled, so it can keep the focus (NEH-1860)", () => {
+      // A disabled element cannot hold focus; Chrome drops it to <body>. The
+      // browser tier (StyledButton.ct.tsx) proves the focus stays — jsdom does
+      // not move focus off a disabled element, so it can only check the wiring.
+      render(<StyledButton loading>Pay</StyledButton>);
+      const button = screen.getByRole("button");
+      expect(button).not.toHaveProperty("disabled", true);
+      expect(button).toHaveAttribute("aria-disabled", "true");
+      // jest-dom's toBeDisabled reads the property only; the accessibility
+      // tree reads aria-disabled, which is what a screen reader announces.
+      expect(button).not.toBeDisabled();
+    });
+
+    it("refuses Enter and Space on the focused button", async () => {
+      const onClick = jest.fn();
+      render(
+        <StyledButton loading onClick={onClick}>
+          Pay
+        </StyledButton>,
+      );
+      screen.getByRole("button").focus();
+      await userEvent.keyboard("{Enter}");
+      await userEvent.keyboard(" ");
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it("does not let the click reach a React ancestor's onClick", async () => {
+      // A disabled button dispatched no click at all, so an ancestor heard
+      // nothing; the guard keeps that.
+      const outer = jest.fn();
+      render(
+        <div onClick={outer}>
+          <StyledButton loading>Pay</StyledButton>
+        </div>,
+      );
+      await userEvent.click(screen.getByRole("button"));
+      expect(outer).not.toHaveBeenCalled();
+    });
+
+    it("does not submit its form — by click, Enter on it, or Enter in a field", async () => {
+      const onSubmit = jest.fn((event: React.FormEvent) => event.preventDefault());
+      render(
+        <form onSubmit={onSubmit}>
+          <label>
+            Name <input name="name" />
+          </label>
+          <StyledButton type="submit" loading>
+            Pay
+          </StyledButton>
+        </form>,
+      );
+      const button = screen.getByRole("button");
+      await userEvent.click(button);
+      button.focus();
+      await userEvent.keyboard("{Enter}");
+      await userEvent.keyboard(" ");
+      await userEvent.type(screen.getByRole("textbox", { name: "Name" }), "Ada{Enter}");
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("the same form DOES submit when the button is not loading (control)", async () => {
+      // Without this, the test above would pass over a harness that cannot
+      // submit at all.
+      const onSubmit = jest.fn((event: React.FormEvent) => event.preventDefault());
+      render(
+        <form onSubmit={onSubmit}>
+          <label>
+            Name <input name="name" />
+          </label>
+          <StyledButton type="submit">Pay</StyledButton>
+        </form>,
+      );
+      await userEvent.click(screen.getByRole("button"));
+      await userEvent.type(screen.getByRole("textbox", { name: "Name" }), "Ada{Enter}");
+      expect(onSubmit).toHaveBeenCalledTimes(2);
+    });
+
+    it("fires onClick again once loading ends", async () => {
+      const onClick = jest.fn();
+      const { rerender } = render(
+        <StyledButton loading onClick={onClick}>
+          Pay
+        </StyledButton>,
+      );
+      rerender(<StyledButton onClick={onClick}>Pay</StyledButton>);
+      const button = screen.getByRole("button");
+      expect(button).not.toHaveAttribute("aria-disabled");
+      await userEvent.click(button);
+      expect(onClick).toHaveBeenCalledTimes(1);
     });
 
     it("marks itself busy for assistive technology", () => {
@@ -113,6 +203,38 @@ describe("StyledButton", () => {
   });
 
   describe("disabled", () => {
+    it("is still the real disabled property, unchanged by NEH-1860", () => {
+      render(<StyledButton disabled>Save</StyledButton>);
+      const button = screen.getByRole("button");
+      expect(button).toBeDisabled();
+      expect(button).not.toHaveAttribute("aria-disabled");
+      expect(button).not.toHaveAttribute("aria-busy");
+    });
+
+    it("does not submit its form", async () => {
+      const onSubmit = jest.fn((event: React.FormEvent) => event.preventDefault());
+      render(
+        <form onSubmit={onSubmit}>
+          <StyledButton type="submit" disabled>
+            Save
+          </StyledButton>
+        </form>,
+      );
+      await userEvent.click(screen.getByRole("button"));
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("stays the property when loading as well", () => {
+      render(
+        <StyledButton disabled loading>
+          Save
+        </StyledButton>,
+      );
+      const button = screen.getByRole("button");
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute("aria-busy", "true");
+    });
+
     it("does not fire onClick", async () => {
       const onClick = jest.fn();
       render(

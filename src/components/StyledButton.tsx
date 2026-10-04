@@ -44,8 +44,20 @@ export interface StyledButtonProps extends HTMLStyledProps<"button"> {
   /** Any of the ten the button recipe defines, not just the five theme ones. */
   variant?: AllowedVariant;
   children?: React.ReactNode;
-  /** Disables the button and swaps the label for a spinner. */
+  /**
+   * Makes the button inert, marks it busy, and swaps the label for a spinner.
+   *
+   * Inert WITHOUT the `disabled` property (NEH-1860): it is `aria-disabled`
+   * and `aria-busy`, and a click guard refuses the activation. A disabled
+   * element cannot hold focus, so Chrome moved the focus to `<body>` the
+   * moment the button a keyboard or screen-reader user had just pressed went
+   * busy — and the result was announced on a page they were no longer in.
+   */
   loading?: boolean;
+  /**
+   * The real `disabled` property: out of the tab order and unclickable.
+   * Unchanged by NEH-1860 — `loading` is the state that keeps the focus.
+   */
   disabled?: boolean;
   tooltip?: React.ReactNode;
   /** What the spinner says while `loading`. Prefer naming the action. */
@@ -96,6 +108,7 @@ const StyledButton = React.forwardRef<HTMLButtonElement, StyledButtonProps>(
       loadText = "Loading",
       size,
       fixedSize,
+      onClick,
       ...rest
     },
     ref,
@@ -130,19 +143,47 @@ const StyledButton = React.forwardRef<HTMLButtonElement, StyledButtonProps>(
       ...(rest.style || {}),
     };
 
+    /*
+     * The double-submit guard, without `disabled` (NEH-1860).
+     *
+     * A loading button must not be clickable — a second submit is the classic
+     * double-charge bug. It used to get that from `disabled`, which also threw
+     * the focus to `<body>`. Instead every activation path is refused here:
+     * a pointer click, Enter and Space on the focused button, and a form's
+     * implicit submission (Enter in a text field) all arrive as a `click` on
+     * the button, and cancelling that click cancels a submit button's
+     * activation behaviour, so the form is not submitted either.
+     * `stopPropagation` keeps a React ancestor's `onClick` from hearing it,
+     * which matches what it heard from a disabled button: nothing.
+     */
+    const busy = Boolean(loading) && !disabled;
+    const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (loading) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      onClick?.(event);
+    };
+
     return (
       <StyledTooltip tooltip={tooltip}>
         <PandaButton
           ref={ref}
           className={buttonRecipe({ variant: effectiveVariant })}
-          // A loading button must not be clickable — a second submit is the
-          // classic double-charge bug — and `aria-busy` is what tells a screen
-          // reader why it went inert.
-          disabled={loading || disabled}
-          aria-busy={loading}
+          // Only the caller's own `disabled` sets the property. `loading` is
+          // `aria-disabled` + the guard above, so the button keeps the focus
+          // while it is busy (NEH-1860).
+          disabled={disabled}
           data-panda-variant={effectiveVariant}
           style={style as React.CSSProperties}
           {...restWithoutPosition}
+          // After the spread, so a caller's props cannot undo the guard or the
+          // state it announces. `aria-busy` is what tells a screen reader WHY
+          // the control went inert.
+          onClick={handleClick}
+          aria-disabled={busy ? true : restWithoutPosition["aria-disabled"]}
+          aria-busy={loading ? true : restWithoutPosition["aria-busy"]}
         >
           {leftIcon && <IconSlot side="left">{leftIcon}</IconSlot>}
           {loading ? (
