@@ -161,6 +161,7 @@ and nothing visible until someone looks at the pixels.
 | `button ghost` text | `textSecondary`, the contract's partner for `boxBgSecondary` | changed in **0.33.0** (NEH-1788); was `textPrimary`, a pairing no host's theme validates |
 | `button link` hover / active | the colour does not change; the underline thickens | changed in **0.33.0** (NEH-1788); before it they took `buttonTextAccent` / `buttonTextSecondary` over no painted surface — white on white in a light theme |
 | `form outline` hover, `menu` item hover | state `textAccent` with the `boxBgAccent` they paint | changed in **0.33.0** (NEH-1788); before it the text rode its resting colour onto the accent surface |
+| `StyledButton loading` | `aria-disabled="true"` + `aria-busy="true"` + a click guard; the `disabled` property is NOT set, so the button keeps the focus | changed in **0.35.0** (NEH-1860); before it `loading` set `disabled`, and Chrome dropped the focus to `<body>` when the pressed button went busy. The explicit `disabled` prop is unchanged. A busy button's hover cursor is `progress`, not `pointer`; its paint is otherwise identical |
 
 **0.27.0 finishes what 0.26.0 started, and the five components needed five
 different fixes because they were frozen five different ways.** "The recipe sets
@@ -1153,6 +1154,36 @@ accessible names and descriptions (`toHaveAccessibleDescription`, `getByRole`
 with `name`), each proved against a planted hand-rolled field that must fail
 (`StyledField.ct.tsx`, `StyledField.test.tsx`). Disabling the describedby
 wiring in `StyledField` fails 5 of 25 unit tests.
+
+## A loading button keeps the focus (NEH-1860, 0.35.0)
+
+`loading` used to mean `disabled={loading || disabled}`. A disabled element
+cannot hold focus, so pressing a button that then went busy threw a keyboard or
+screen-reader user's focus to `<body>`, and the result was announced on a page
+they were no longer in. optima-cloud-saas hand-rolled the fix once (NEH-1829);
+it belongs here.
+
+- **`loading` is now `aria-disabled` + `aria-busy` + a guard**, never the
+  property. The guard cancels the `click` — and every activation path arrives
+  as one: a pointer, Enter and Space on the button, and a form's implicit
+  submission from Enter in a field. Cancelling a submit button's click cancels
+  its submit, so the double-submit protection the old comment cited survives.
+  It also stops React propagation, matching the silence a disabled button gave
+  its ancestors. The ARIA attributes and guard sit AFTER the prop spread so a
+  caller's props cannot undo them.
+- **`disabled` is unchanged** — the real property, out of the tab order. With
+  both set, `disabled` wins and the button is still `aria-busy`.
+- **Only the browser tier can prove focus retention.** jsdom does not move focus
+  off a disabled element, so a jsdom focus test passes on the broken code too
+  (measured, and deleted for that reason). `StyledButton.ct.tsx` "a loading
+  button keeps the focus" is the proof: planting the old
+  `disabled={loading || disabled}` fails 3 of its 6 tests at all four viewports;
+  removing the guard fails 2 of 6 there and 4 jest tests.
+- **The paint did not move**, because nothing in `buttonRecipe` ever keyed off
+  `:disabled`. The one addition is `&[aria-busy=true] { cursor: progress }`,
+  stated under `_hover` too because the hover's `pointer` would otherwise win.
+- `toBeDisabled()` (jest-dom and Playwright) reads the property, so it is now
+  FALSE for a loading button; assert `aria-disabled` instead.
 
 ## A wrapper between a prop and the element it describes (NEH-1475)
 

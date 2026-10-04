@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import StyledButton from "./StyledButton";
 import StyledBox from "./StyledBox";
 import StyledText from "./StyledText";
+import { ButtonThatGoesBusy, FormThatGoesBusy } from "./StyledButton.harness";
 import type { CSSProperties } from "react";
 
 /**
@@ -373,5 +374,134 @@ test.describe("a link keeps its colour under the pointer (NEH-1788)", () => {
     // The cue that replaced the colour change has to actually be there, or the
     // hover has no feedback at all.
     expect(hovered.thickness).not.toBe(rest.thickness);
+  });
+});
+
+test.describe("a loading button keeps the focus (NEH-1860)", () => {
+  /**
+   * `loading` used to set the `disabled` property, and a disabled element
+   * cannot hold focus: Chrome moved it to `<body>` the moment the button a
+   * keyboard user had just pressed went busy. These are the browser half of
+   * the fix — jsdom does not drop focus from a disabled element, so it cannot
+   * tell the two implementations apart. Planting the old
+   * `disabled={loading || disabled}` fails three of the six here, at every
+   * viewport; removing the click guard fails two.
+   */
+
+  test("pressing it with Enter leaves the focus on it while it is busy", async ({
+    mount,
+    page,
+  }) => {
+    await mount(<ButtonThatGoesBusy />);
+    const button = page.getByRole("button");
+
+    await button.focus();
+    await page.keyboard.press("Enter");
+
+    await expect(button).toHaveAttribute("aria-busy", "true");
+    await expect(button).toHaveAttribute("aria-disabled", "true");
+    await expect(page.getByRole("status")).toContainText("Saving");
+    await expect(button).toBeFocused();
+    expect(await page.evaluate(() => document.activeElement?.tagName)).toBe("BUTTON");
+  });
+
+  test("a submit button keeps it too, and the form is submitted once", async ({
+    mount,
+    page,
+  }) => {
+    await mount(<FormThatGoesBusy />);
+    const button = page.getByRole("button");
+
+    await button.focus();
+    await page.keyboard.press("Enter");
+
+    await expect(button).toHaveAttribute("aria-busy", "true");
+    await expect(button).toBeFocused();
+    await expect(page.getByTestId("submits")).toHaveText("1");
+  });
+
+  test("Enter, Space and a click on the busy button fire nothing", async ({ mount, page }) => {
+    await mount(<ButtonThatGoesBusy />);
+    const button = page.getByRole("button");
+
+    await button.focus();
+    await page.keyboard.press("Enter");
+    await expect(button).toHaveAttribute("aria-busy", "true");
+
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Space");
+    // `force`: Playwright would otherwise wait for an aria-disabled element to
+    // become enabled. The point is that a real click gets through to nothing.
+    await button.click({ force: true });
+
+    await expect(page.getByTestId("clicks")).toHaveText("1");
+    await expect(button).toBeFocused();
+  });
+
+  test("a busy submit button refuses its own press AND the form's implicit submission", async ({
+    mount,
+    page,
+  }) => {
+    await mount(<FormThatGoesBusy />);
+    const button = page.getByRole("button");
+    const field = page.getByRole("textbox", { name: "Name" });
+
+    await button.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("submits")).toHaveText("1");
+
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Space");
+    await button.click({ force: true });
+    // Enter in a text field submits through the default button — the path a
+    // disabled button used to refuse by being disabled.
+    await field.focus();
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByTestId("submits")).toHaveText("1");
+  });
+
+  test("busy paints exactly as it did, and the pointer says progress", async ({ mount, page }) => {
+    // Nothing in `buttonRecipe` ever keyed off `:disabled`, so moving from the
+    // property to `aria-disabled` must not change the paint. The one addition
+    // is the cursor: a hover over a busy button used to say "pointer".
+    const component = await mount(
+      <div>
+        <StyledButton data-testid="idle">Save</StyledButton>
+        <StyledButton data-testid="busy" loading loadText="Saving">
+          Save
+        </StyledButton>
+      </div>,
+    );
+    const paint = (el: Element) => {
+      const s = getComputedStyle(el);
+      return { bg: s.backgroundColor, colour: s.color, border: s.borderColor, opacity: s.opacity };
+    };
+    const idle = await component.getByTestId("idle").evaluate(paint);
+    const busy = await component.getByTestId("busy").evaluate(paint);
+    expect(busy).toEqual(idle);
+
+    await page.getByTestId("busy").hover({ force: true });
+    const cursor = await component
+      .getByTestId("busy")
+      .evaluate((el) => getComputedStyle(el).cursor);
+    expect(cursor).toBe("progress");
+  });
+
+  test("the disabled prop is still the real property, out of the tab order", async ({
+    mount,
+    page,
+  }) => {
+    await mount(
+      <div>
+        <button type="button">Before</button>
+        <StyledButton disabled>Save</StyledButton>
+      </div>,
+    );
+    await page.getByRole("button", { name: "Before" }).focus();
+    await page.keyboard.press("Tab");
+
+    await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Save" })).not.toBeFocused();
   });
 });

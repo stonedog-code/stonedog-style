@@ -52,6 +52,20 @@ export const buttonRecipe = defineRecipe({
     _hover: {
       cursor: "pointer",
     },
+    /**
+     * A busy button says so to the pointer as well (NEH-1860).
+     *
+     * `loading` no longer sets the `disabled` property — it is `aria-disabled`
+     * + `aria-busy` so the button keeps the focus — and nothing in this recipe
+     * ever keyed off `:disabled`, so the paint is unchanged. What a hover DID
+     * say was "pointer": click me. Over a button that will refuse the click,
+     * `progress` is the honest cursor. Stated under `_hover` as well as at
+     * rest, because the hover rule above is the one that would otherwise win.
+     */
+    "&[aria-busy=true]": {
+      cursor: "progress",
+      _hover: { cursor: "progress" },
+    },
     border: "1px solid",
     borderColor: "borderBgPrimary",
     borderRadius: "var(--radii-md, 0.375rem)",
