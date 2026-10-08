@@ -282,19 +282,25 @@ export const StyledToaster: React.FC<StyledToasterProps> = ({
    * The region is height-capped and scrolls (the recipe's `maxHeight`). A
    * scroll container opens at its TOP, which here is the OLDEST toast, so a
    * fresh one would land out of sight below the fold. When a toast arrives,
-   * scroll to the end, where the newest sits. Keyed on the count rising, so a
-   * reader who has scrolled up to an older message is not yanked back when
-   * one is dismissed.
+   * scroll to the end, where the newest sits.
+   *
+   * Keyed on the NEWEST toast's id, not on the count: a toast arriving in the
+   * same update as another is dismissed leaves the count unchanged. And only
+   * on an arrival, so a reader who has scrolled up to an older message is not
+   * yanked back when one is dismissed. The store keeps them newest-first.
    */
   const regionRef = useRef<HTMLDivElement>(null);
-  const shown = useRef(0);
+  const newestShown = useRef<string | undefined>(undefined);
+  const newestId = toasts[0]?.id;
   useIsomorphicLayoutEffect(() => {
     const region = regionRef.current;
-    // Nothing is rendered until `mounted`, so there is nothing to count yet.
+    // Nothing is rendered until `mounted`, so there is nothing to scroll yet.
     if (!region) return;
-    if (toasts.length > shown.current) region.scrollTop = region.scrollHeight;
-    shown.current = toasts.length;
-  }, [toasts.length, mounted]);
+    if (newestId !== undefined && newestId !== newestShown.current) {
+      region.scrollTop = region.scrollHeight;
+    }
+    newestShown.current = newestId;
+  }, [newestId, mounted]);
 
   // Only the region slot is read here; every card resolves its own, above.
   const classes = toastRecipe();

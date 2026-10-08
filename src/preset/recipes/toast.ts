@@ -73,6 +73,15 @@ export const toastRecipe = defineSlotRecipe({
       maxHeight: { base: "50dvh", lg: "calc(100dvh - {spacing.4})" },
       overflowY: "auto",
       overscrollBehavior: "contain",
+      // No visible scrollbar, for two reasons. The region is
+      // `pointer-events: none`, so a scrollbar could be seen but never
+      // dragged; and a classic scrollbar takes its width out of the region's
+      // content box, which the cards fill exactly, so it would push them into
+      // a sideways scroll. Wheel and touch over a card still scroll the stack,
+      // focus scrolls a control into view, and the older card cut off at the
+      // top edge is the cue that there is more.
+      scrollbarWidth: "none",
+      "&::-webkit-scrollbar": { display: "none" },
       zIndex: "toast",
     },
     root: {
