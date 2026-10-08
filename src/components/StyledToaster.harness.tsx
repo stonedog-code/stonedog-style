@@ -1,6 +1,8 @@
 import React from "react";
 import StyledToaster from "./StyledToaster";
 import { createToaster, type ToastOptions } from "./toaster-store";
+import { StonedogStyleProvider } from "../config/style-config";
+import type { FontSizeProfile } from "../config/types";
 
 /**
  * Mount target for `StyledToaster.ct.tsx`.
@@ -19,9 +21,16 @@ import { createToaster, type ToastOptions } from "./toaster-store";
 export function ToasterHarness({
   toasts = [{ title: "Saved.", type: "success" as const }],
   surface = "#0f172a",
+  fontSizeProfile,
 }: {
   toasts?: ToastOptions[];
   surface?: string;
+  /**
+   * The reader's text-size step. Omitted, the toaster renders outside any
+   * provider, exactly as before. The narrow-viewport tests pass `xl`, because
+   * the largest step is what makes a card's content want to be widest.
+   */
+  fontSizeProfile?: FontSizeProfile;
 }) {
   const [toaster] = React.useState(() => createToaster());
 
@@ -40,7 +49,7 @@ export function ToasterHarness({
     }
   }, [toaster]);
 
-  return (
+  const body = (
     <div
       style={{
         background: surface,
@@ -51,5 +60,11 @@ export function ToasterHarness({
     >
       <StyledToaster toaster={toaster} />
     </div>
+  );
+
+  return fontSizeProfile ? (
+    <StonedogStyleProvider fontSizeProfile={fontSizeProfile}>{body}</StonedogStyleProvider>
+  ) : (
+    body
   );
 }

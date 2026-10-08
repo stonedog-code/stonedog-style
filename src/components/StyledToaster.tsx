@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { toastRecipe } from "styled-system/recipes";
 import { cx } from "styled-system/css";
@@ -226,6 +226,11 @@ function ToastItem({
   );
 }
 
+// Layout effect on the client, so the scroll lands before the frame paints;
+// plain effect on the server, where a layout effect only produces a warning.
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
+
 export const StyledToaster: React.FC<StyledToasterProps> = ({
   toaster,
   icons,
@@ -273,6 +278,30 @@ export const StyledToaster: React.FC<StyledToasterProps> = ({
     [toaster],
   );
 
+  /**
+   * The region is height-capped and scrolls (the recipe's `maxHeight`). A
+   * scroll container opens at its TOP, which here is the OLDEST toast, so a
+   * fresh one would land out of sight below the fold. When a toast arrives,
+   * scroll to the end, where the newest sits.
+   *
+   * Keyed on the NEWEST toast's id, not on the count: a toast arriving in the
+   * same update as another is dismissed leaves the count unchanged. And only
+   * on an arrival, so a reader who has scrolled up to an older message is not
+   * yanked back when one is dismissed. The store keeps them newest-first.
+   */
+  const regionRef = useRef<HTMLDivElement>(null);
+  const newestShown = useRef<string | undefined>(undefined);
+  const newestId = toasts[0]?.id;
+  useIsomorphicLayoutEffect(() => {
+    const region = regionRef.current;
+    // Nothing is rendered until `mounted`, so there is nothing to scroll yet.
+    if (!region) return;
+    if (newestId !== undefined && newestId !== newestShown.current) {
+      region.scrollTop = region.scrollHeight;
+    }
+    newestShown.current = newestId;
+  }, [newestId, mounted]);
+
   // Only the region slot is read here; every card resolves its own, above.
   const classes = toastRecipe();
   const resolvedIcons = icons ?? DEFAULT_ICONS;
@@ -281,6 +310,7 @@ export const StyledToaster: React.FC<StyledToasterProps> = ({
 
   return createPortal(
     <div
+      ref={regionRef}
       className={cx(classes.region)}
       // The region is present from mount and stays, whether or not it holds
       // anything. A live region created at the same moment as its content is
