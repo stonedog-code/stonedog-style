@@ -85,6 +85,52 @@ export const CHART_CURSOR_VAR = chartVar("cursor");
 /** The surface a chart sits on — used for the ring around an active dot. */
 export const CHART_SURFACE_VAR = chartVar("surface");
 
+/*
+ * The tooltip card's own roles (NEH-2042).
+ *
+ * The card floats OVER the plot, so it needs things the plot does not: a
+ * surface that is never see-through, and a boundary that reads against lines
+ * and grid rather than blending into them. Each role defaults to the chrome
+ * token it used to borrow, so a host that defines none of these still gets a
+ * themed card — the extra names exist for a host that wants an elevated
+ * overlay surface rather than the box the chart sits on.
+ */
+
+/** `chartVar(suffix)` with one more link at the end of the chain. */
+function chartVarOr(suffix: string, fallback: string): string {
+  return chartVar(suffix).replace(/\)+$/, (closers) => `, ${fallback}${closers}`);
+}
+
+/** The card's themed surface. May be translucent — see the base below. */
+export const CHART_TOOLTIP_BG_VAR = chartVarOr("tooltip-bg", CHART_SURFACE_VAR);
+
+/**
+ * The OPAQUE layer painted beneath the themed surface.
+ *
+ * Themes are host data and a host's box surface may carry alpha; a tooltip
+ * whose surface is 80% opaque lets the plot's lines run through its text. So
+ * the card paints this first and the themed surface over it, and whatever the
+ * theme does the result composites to a solid colour.
+ *
+ * The chain ends in the CSS system colour `Canvas` rather than in nothing. It
+ * is the one exception to "no colour at the end of the chain", and it is not a
+ * colour this package chooses: it is the user agent's own page background for
+ * the element's `color-scheme`. Ending in nothing here would reproduce exactly
+ * the see-through card this token exists to prevent. A host on a dark theme
+ * without `color-scheme: dark` should define it — `Canvas` is then white.
+ */
+export const CHART_TOOLTIP_BASE_VAR = chartVarOr("tooltip-base", "Canvas");
+
+/** Card text. Real text, so the axis text colour at full strength. */
+export const CHART_TOOLTIP_TEXT_VAR = chartVarOr("tooltip-text", CHART_AXIS_TEXT_VAR);
+
+/**
+ * The card's 1px boundary. NOT the grid token: the grid is the one chart
+ * element allowed to be low-contrast, and a boundary drawn in it disappears
+ * against the very grid the card sits on. Defaults to the text colour.
+ */
+export const CHART_TOOLTIP_BORDER_VAR = chartVarOr("tooltip-border", CHART_AXIS_TEXT_VAR);
+
 /**
  * Axis tick size.
  *
