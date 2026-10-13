@@ -14,6 +14,12 @@ import {
   CHART_SERIES_DASH,
   CHART_SERIES_HATCH,
   CHART_SERIES_SLOTS,
+  CHART_AXIS_TEXT_VAR,
+  CHART_SURFACE_VAR,
+  CHART_TOOLTIP_BASE_VAR,
+  CHART_TOOLTIP_BG_VAR,
+  CHART_TOOLTIP_BORDER_VAR,
+  CHART_TOOLTIP_TEXT_VAR,
   CHART_VAR_NAMESPACES,
   chartSeriesDash,
   chartSeriesHatch,
@@ -56,6 +62,29 @@ describe("the fallback chain", () => {
     // would turn "the host never defined the palette" from a visible fault
     // into a silent one.
     expect(chartVar("series-1")).toMatch(/^var\([^)]*, var\(--hopper-chart-series-1\)\)$/);
+  });
+});
+
+describe("the tooltip roles (NEH-2042)", () => {
+  it("each falls back to the chrome token it used to borrow", () => {
+    // A host defining none of the tooltip names must still get a themed card.
+    expect(CHART_TOOLTIP_BG_VAR).toBe(
+      `var(--stonedog-chart-tooltip-bg, var(--hopper-chart-tooltip-bg, ${CHART_SURFACE_VAR}))`,
+    );
+    expect(CHART_TOOLTIP_TEXT_VAR).toBe(
+      `var(--stonedog-chart-tooltip-text, var(--hopper-chart-tooltip-text, ${CHART_AXIS_TEXT_VAR}))`,
+    );
+  });
+
+  it("draws the border at text strength, never in the low-contrast grid token", () => {
+    expect(CHART_TOOLTIP_BORDER_VAR).toContain(CHART_AXIS_TEXT_VAR);
+    expect(CHART_TOOLTIP_BORDER_VAR).not.toContain("chart-grid");
+  });
+
+  it("ends the opaque base in the UA's Canvas, so the card can never be see-through", () => {
+    expect(CHART_TOOLTIP_BASE_VAR).toBe(
+      "var(--stonedog-chart-tooltip-base, var(--hopper-chart-tooltip-base, Canvas))",
+    );
   });
 });
 

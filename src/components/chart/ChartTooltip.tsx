@@ -4,9 +4,10 @@ import React from "react";
 import StyledBox from "../StyledBox";
 import StyledText from "../StyledText";
 import {
-  CHART_AXIS_TEXT_VAR,
-  CHART_GRID_VAR,
-  CHART_SURFACE_VAR,
+  CHART_TOOLTIP_BASE_VAR,
+  CHART_TOOLTIP_BG_VAR,
+  CHART_TOOLTIP_BORDER_VAR,
+  CHART_TOOLTIP_TEXT_VAR,
   chartSeriesVar,
 } from "./chart-palette";
 
@@ -66,6 +67,28 @@ function formatValue(value: ChartTooltipPayloadEntry["value"]): string {
   return String(value);
 }
 
+/**
+ * The card's paint, as an inline style rather than Panda props (NEH-2042).
+ *
+ * These values are computed in `chart-palette.ts`, and Panda extracts only
+ * values it can read as literals in the file that uses them. As style props
+ * they put class names in the DOM with NO rule behind them, so the card shipped
+ * with no background, no border colour and inherited text — see-through over
+ * the plot on a dark theme. An inline style is always applied, and does not
+ * depend on a consumer's `include` glob either.
+ *
+ * Two layers, so the card is opaque whatever the theme says: the opaque base
+ * as `background-color`, the themed surface as a one-colour gradient over it.
+ * A translucent theme surface then composites to a solid colour instead of
+ * letting the lines run through the text.
+ */
+const TOOLTIP_PAINT: React.CSSProperties = {
+  backgroundColor: CHART_TOOLTIP_BASE_VAR,
+  backgroundImage: `linear-gradient(${CHART_TOOLTIP_BG_VAR}, ${CHART_TOOLTIP_BG_VAR})`,
+  color: CHART_TOOLTIP_TEXT_VAR,
+  border: `1px solid ${CHART_TOOLTIP_BORDER_VAR}`,
+};
+
 export const ChartTooltip: React.FC<ChartTooltipProps> = ({
   active,
   label,
@@ -85,17 +108,14 @@ export const ChartTooltip: React.FC<ChartTooltipProps> = ({
   return (
     <StyledBox
       data-testid="chart-tooltip"
-      bg={CHART_SURFACE_VAR}
-      color={CHART_AXIS_TEXT_VAR}
-      borderWidth="1px"
-      borderColor={CHART_GRID_VAR}
       borderRadius="lg"
       px={3}
       py={2}
       boxShadow="0 6px 20px rgba(0, 0, 0, 0.18)"
+      style={TOOLTIP_PAINT}
     >
       {heading !== "" && (
-        <StyledText size="sm" opacity={0.85} mb={1}>
+        <StyledText size="sm" color="inherit" mb={1}>
           {heading}
         </StyledText>
       )}
@@ -118,7 +138,7 @@ export const ChartTooltip: React.FC<ChartTooltipProps> = ({
                 backgroundColor: chartSeriesVar(slot),
               }}
             />
-            <StyledText size="sm">
+            <StyledText size="sm" color="inherit">
               {entry.name ?? key}: {formatValue(entry.value)}
             </StyledText>
           </div>

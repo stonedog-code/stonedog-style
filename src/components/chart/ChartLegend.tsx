@@ -90,7 +90,9 @@ export const ChartLegend: React.FC<ChartLegendProps> = ({
         style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
       >
         {variant === "bar" ? <HatchSwatch s={s} /> : <LineSwatch s={s} />}
-        <StyledText size="sm" color={CHART_AXIS_TEXT_VAR}>
+        {/* Inline, not a Panda prop: a computed value yields a class with no
+            rule behind it, so the label silently inherited (NEH-2042). */}
+        <StyledText size="sm" style={{ color: CHART_AXIS_TEXT_VAR }}>
           {s.label}
         </StyledText>
       </span>
