@@ -71,14 +71,17 @@ const TEXTLESS_RECIPES = new Set([
 ]);
 
 /**
- * Variants where inheriting the surrounding text colour is the design intent.
+ * There is no name-based exemption any more (NEH-1952).
  *
- * `glass` is translucent by definition: the surface is meant to show the page
- * through it, and pinning a text colour would defeat that on half the
- * backgrounds it is placed over. Recorded as a decision, not an oversight
- * (NEH-441 asked for one either way).
+ * `glass` used to be excused here as "translucent by definition: the surface is
+ * meant to show the page through it". That excuse was the defect. `box glass`
+ * painted `boxBgSecondary/60` with `textPrimary`, so its ratio was a function of
+ * whatever page the host placed it on — 2.41:1 on a consumer's dashboard tile
+ * subtitles. It now paints an opaque contract surface and is checked like any
+ * other variant; removing the exemption turned up no other offender. A
+ * genuinely translucent variant is still excused, by `isTranslucent` above,
+ * on what it paints rather than on what it is called.
  */
-const INHERITS_BY_DESIGN = new Set(["glass"]);
 
 /**
  * This file used to carry one deferral: `input-radio__item--variant_none`
@@ -220,13 +223,11 @@ describe("a variant that paints a background states its text colour", () => {
   for (const [selector, bg] of backgroundBySelector) {
     const m = VARIANT_SELECTOR.exec(selector);
     if (!m) continue; // not a plain variant rule (pseudo-states excluded)
-    // Both groups are non-optional in the pattern, so a match guarantees them;
-    // the compiler cannot see that through `exec`'s signature.
+    // The group is non-optional in the pattern, so a match guarantees it; the
+    // compiler cannot see that through `exec`'s signature.
     const recipe = m[1]!;
-    const variant = m[2]!;
 
     if (TEXTLESS_RECIPES.has(recipe)) continue;
-    if (INHERITS_BY_DESIGN.has(variant)) continue;
 
     if (PAINTS_NOTHING.test(bg)) continue;
     if (PAINTS_NOTHING_TOKEN.test(bg)) continue;
@@ -317,10 +318,9 @@ describe("a variant that paints a background states its text colour", () => {
     // nothing about, and asserting on it would be inventing a rule rather than
     // enforcing one.
     //
-    // `INHERITS_BY_DESIGN` is deliberately NOT consulted here, and that is a
-    // change from NEH-796 rather than an oversight. It excuses `glass` from the
-    // sweep above because a translucent surface should show the page through it
-    // — but this sweep only fires when the background is a CONTRACT SURFACE
+    // NEH-796 had a name-based `glass` exemption that this sweep deliberately
+    // did not consult (it is gone entirely now, NEH-1952). The reasoning still
+    // holds: this sweep only fires when the background is a CONTRACT SURFACE
     // TOKEN, and the contract naming a text partner for a surface is the
     // contract saying that surface is opaque and has a known foreground. Five
     // `glass` variants painted one of those and stated the wrong partner, the

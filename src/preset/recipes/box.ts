@@ -61,7 +61,24 @@ export const boxRecipe = defineRecipe({
         borderRadius: "2xl", // more rounded for curved glass effect
         borderWidth: "2px",
         borderStyle: "solid",
-        bg: "boxBgSecondary/60",
+        /**
+         * An OPAQUE contract surface, and the text the contract pairs with it
+         * (NEH-1952).
+         *
+         * This was `boxBgSecondary/60` with `textPrimary`: the partner of a
+         * different surface, over a blend that let 40% of the page through,
+         * so the ratio depended on the host's layout rather than its theme.
+         * Measured in a consumer's dashboard tiles: 2.41:1 on subtitles and
+         * 2.51:1 on Zen-dark titles.
+         *
+         * `boxBgPrimary` rather than an opaque `boxBgSecondary` because the
+         * text inside a tile is mostly `StyledText`/`StyledHeading`, which
+         * state `textPrimary` themselves — so this is the one surface where
+         * the DEFAULT text inside the box is the paired text. The arithmetic
+         * for both choices, over every SYSTEM theme of the largest consumer,
+         * is `box-glass-surface-pairing.test.ts`.
+         */
+        bg: "boxBgPrimary",
         color: "textPrimary",
         boxShadow: "xl",
         fontWeight: "bold",
