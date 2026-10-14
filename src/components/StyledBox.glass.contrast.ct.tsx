@@ -95,10 +95,11 @@ test.describe("box glass — tile text clears AA on every SYSTEM theme", () => {
 
       // The surface is opaque: its alpha is 1, so the page behind cannot move
       // the ratio. `color-mix(... transparent)` would serialise with an alpha.
+      // Checked AFTER the ratios are measured, so a translucent surface still
+      // reports its numbers rather than stopping at the first assertion.
       const tileBg = await component
         .getByTestId("tile")
         .evaluate((el) => getComputedStyle(el).backgroundColor);
-      expect(tileBg).toMatch(/^rgb\(/);
 
       const report: string[] = [`tile bg ${tileBg}`];
       const failures: string[] = [];
@@ -111,7 +112,7 @@ test.describe("box glass — tile text clears AA on every SYSTEM theme", () => {
         body: report.join("\n"),
         contentType: "text/plain",
       });
-      expect(failures).toEqual([]);
+      expect({ opaque: /^rgb\(/.test(tileBg), failures }).toEqual({ opaque: true, failures: [] });
     });
   }
 });
