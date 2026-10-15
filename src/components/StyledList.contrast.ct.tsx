@@ -50,7 +50,11 @@ const PAINTED_VARIANTS = ["solid"] as const;
  * defensible alternative and a visible design change. If that ever lands, this
  * block fails and asks for the variant to be moved back up.
  */
-const UNPAINTED_VARIANTS = ["matte"] as const;
+const UNPAINTED_VARIANTS = ["matte", "glass"] as const;
+// `glass` joined in NEH-2068: its root laid 5% white over whatever tile held
+// it, so rows in that tile's partner text fell below AA in four of the largest
+// consumer's theme/modes. It paints nothing now, for the same reason `matte`
+// does. `StyledList.glass.contrast.ct.tsx` measures it on a real glass tile.
 
 test.describe("StyledList — text is paired with its surface", () => {
   for (const variant of UNPAINTED_VARIANTS) {

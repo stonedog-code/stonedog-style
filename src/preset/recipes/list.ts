@@ -130,8 +130,33 @@ export const listRecipe = defineSlotRecipe({
       },
       glass: {
         root: {
-          backdropFilter: "blur(10px)",
-          bg: "rgba(255, 255, 255, 0.05)",
+          /**
+           * **No surface of its own, and no backdrop blur (NEH-2068).**
+           *
+           * This root painted `rgba(255, 255, 255, 0.05)` behind a
+           * `blur(10px)` backdrop. A glass list sits in a glass tile, which
+           * paints opaque `boxBgPrimary` (NEH-1952), and its rows are
+           * `textPrimary` — the partner of `boxBgPrimary`, not of
+           * `boxBgPrimary` lightened by 5% white. Measured in a consumer, that
+           * blend took row text to 4.16–4.36:1 in 4 of its 18 SYSTEM
+           * theme/modes, while `solid`, `outline` and `matte` passed on all
+           * 18. Same unpaired-blend defect NEH-1952 removed from `box glass`.
+           *
+           * Painting nothing means the rows sit on whatever surface their
+           * container paired them with, which is what `outline` and `matte`
+           * already do.
+           *
+           * The blur went with the tint because, without it, it has nothing
+           * left to do and one thing it still does wrongly: over an opaque
+           * tile it blurs a flat colour into the same flat colour, and over a
+           * busy page it frosts a background whose ratio with the text
+           * nothing pairs. Meanwhile `backdrop-filter` still makes the list a
+           * containing block for `position: fixed` descendants and a
+           * separate compositing layer. All cost, no paint.
+           *
+           * Scored in `list-glass-surface-pairing.test.ts` (stylesheet
+           * arithmetic) and `StyledList.glass.contrast.ct.tsx` (real engine).
+           */
           border: "1px solid rgba(255, 255, 255, 0.2)",
           borderRadius: "lg",
         },
