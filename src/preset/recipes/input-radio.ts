@@ -17,9 +17,20 @@ export const inputRadioRootRecipe = defineSlotRecipe({
       borderRadius: "md",
       borderWidth: "1px",
       borderColor: "transparent",
+      /**
+       * A checked item paints NO wash of its own (NEH-2075).
+       *
+       * This used to add `rgba(0, 123, 255, 0.2)` — a literal blue, the one
+       * colour this package forbids in a recipe, laid over whatever surface
+       * the variant painted, with no ink paired to the blend. Measured in
+       * Chromium on a glass tile, the checked `glass` item fell to 4.23:1
+       * (Zen dark) and 4.31:1 (Ocean Breeze dark) while its unchecked
+       * neighbour cleared AA. The checked state is still signalled twice,
+       * neither by colour alone: the indicator dot scales in, and the
+       * control's border takes `boxBgSecondary` — both below, unchanged.
+       */
       "&[data-checked]": {
         borderColor: "boxBgSecondary",
-        bg: "rgba(0, 123, 255, 0.2)",
       },
     },
     // Visually hidden, NOT `display: none` — which is what this was.
@@ -110,11 +121,31 @@ export const inputRadioRootRecipe = defineSlotRecipe({
       },
       glass: {
         item: {
-          backdropFilter: "blur(10px)",
-          backgroundColor: "rgba(255, 255, 255, 0.1)",
+          /**
+           * **No surface of its own, no backdrop blur, and no pinned text colour
+           * (NEH-2075).**
+           *
+           * This variant painted `rgba(255, 255, 255, 0.1)` behind a
+           * `blur(10px)` backdrop and stated `color: textPrimary`. Measured in
+           * Chromium across the largest consumer's 18 SYSTEM theme/modes
+           * (`glass-recipes.contrast.ct.tsx`), that was two defects:
+           *
+           * - on a glass tile (opaque `boxBgPrimary`, NEH-1952) the tint
+           *   lightened the surface under `textPrimary` to 3.78–3.95:1 in 4 of
+           *   18 — the NEH-2068 defect at twice the alpha;
+           * - on the page (`boxBgMain`) the pinned `textPrimary` is the partner
+           *   of a surface the page is not: 1.04:1 on two light themes and
+           *   1.18:1 on two dark ones.
+           *
+           * Painting nothing and pinning nothing fixes both at once: the text
+           * sits on whatever surface the container paired it with, in that
+           * container's own ink — which is what `list glass` and `box matte`
+           * already do. The blur went with the tint for NEH-2068's reasons:
+           * over an opaque tile it blurs a flat colour into itself, and it
+           * still makes the element a containing block for fixed descendants.
+           */
           border: "1px solid",
           borderColor: "borderBgPrimary",
-          color: "textPrimary",
         },
       },
       matte: {
