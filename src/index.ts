@@ -407,6 +407,7 @@ export type {
   StyledTableProps,
   StyledTableHeaderProps,
   StyledTableBodyProps,
+  StyledTableRowProps,
   ColumnDefinition,
 } from "./components/StyledTable";
 

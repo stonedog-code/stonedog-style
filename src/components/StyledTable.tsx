@@ -93,7 +93,48 @@ const PandaTableRoot = styled("table", {
 const PandaTableHeader = styled("thead");
 const PandaTableBody = styled("tbody");
 const PandaTableFooter = styled("tfoot");
-const PandaTableRow = styled("tr");
+/**
+ * A row, and — when it can be activated — an interactive one (NEH-2081).
+ *
+ * Every consumer that wanted a clickable row hand-built a raw `<table>` and
+ * painted its own hover; one painted a fixed `#f7fafc` from `onMouseEnter`,
+ * unreadable in every dark theme. The shape that invites the mistake was the
+ * only one on offer. This is the other shape:
+ *
+ * - **hover and focus paint a contract pair**, `boxBgSecondary` with
+ *   `textSecondary` — a theme surface via the host's custom properties, never
+ *   a colour, and the text that belongs on it stated in the same rule (the
+ *   NEH-1788 rule: a state is a pairing too). Focus paints what hover paints,
+ *   because for a keyboard reader focus IS the pointer; the outline is the
+ *   second cue, so the state is never colour alone.
+ * - **48px**, the house tap-target floor. On a `<tr>` `height` is a minimum
+ *   (a row grows with its content), so it is stated as `height` rather than
+ *   the `min-height` the other controls use, which a table row ignores.
+ *
+ * The cells inherit the row's colour. A `StyledText` inside a cell states its
+ * own (`textPrimary`) and will not follow the hover — the same caveat
+ * `StyledButton` carries; say `color="inherit"` on it.
+ */
+const PandaTableRow = styled("tr", {
+  base: {},
+  variants: {
+    interactive: {
+      true: {
+        cursor: "pointer",
+        height: "48px",
+        _hover: { backgroundColor: "boxBgSecondary", color: "textSecondary" },
+        _focusVisible: {
+          backgroundColor: "boxBgSecondary",
+          color: "textSecondary",
+          outline: "3px solid",
+          outlineColor: "buttonBgAccent",
+          outlineOffset: "-3px",
+        },
+      },
+      false: {},
+    },
+  },
+});
 
 /**
  * The 1px rule under each cell.
@@ -238,9 +279,75 @@ const StyledFooter: React.FC<StyledTableFooterProps> = (props) => (
 );
 StyledFooter.displayName = "StyledTable.Footer";
 
-type StyledTableRowProps = React.ComponentProps<typeof PandaTableRow>;
-const StyledRow: React.FC<StyledTableRowProps> = (props) => (
-  <PandaTableRow {...props} />
+export type StyledTableRowProps = Omit<
+  React.ComponentProps<typeof PandaTableRow>,
+  "interactive"
+> & {
+  /**
+   * Makes the row an activatable control (NEH-2081).
+   *
+   * With it set the row is in the tab order (`tabIndex` 0, overridable),
+   * Enter and Space activate it, a click activates it, and hover/focus paint
+   * the `boxBgSecondary`/`textSecondary` pair. Without it the row is a plain
+   * `<tr>`, byte-identical to before this prop existed.
+   *
+   * The row keeps its native `row` role — overriding it to `button` would take
+   * the cells out of the table's accessibility tree — so a screen reader
+   * announces the cells' content. Pass `aria-label` when that content does not
+   * say what activation does ("Open Ada Lovelace's account").
+   *
+   * A click or key that comes from a control INSIDE the row (a button or link
+   * in a cell) does not activate the row: that control owns its own event.
+   */
+  onActivate?: (() => void) | undefined;
+};
+
+/** Interactive elements a click or key inside the row belongs to, not the row. */
+const NESTED_CONTROL = "a[href],button,input,select,textarea,summary,[role=button],[role=link],[contenteditable=true]";
+
+function fromNestedControl(event: React.SyntheticEvent<HTMLTableRowElement>): boolean {
+  const target = event.target as Element | null;
+  if (!target || target === event.currentTarget) return false;
+  const control = target.closest(NESTED_CONTROL);
+  return control !== null && control !== event.currentTarget && event.currentTarget.contains(control);
+}
+
+const StyledRow = React.forwardRef<HTMLTableRowElement, StyledTableRowProps>(
+  function StyledRow({ onActivate, onClick, onKeyDown, tabIndex, ...rest }, ref) {
+    if (!onActivate) {
+      return (
+        <PandaTableRow
+          ref={ref}
+          onClick={onClick}
+          onKeyDown={onKeyDown}
+          {...(tabIndex !== undefined ? { tabIndex } : {})}
+          {...rest}
+        />
+      );
+    }
+    return (
+      <PandaTableRow
+        ref={ref}
+        interactive
+        tabIndex={tabIndex ?? 0}
+        data-interactive=""
+        onClick={(event) => {
+          onClick?.(event);
+          if (event.defaultPrevented || fromNestedControl(event)) return;
+          onActivate();
+        }}
+        onKeyDown={(event) => {
+          onKeyDown?.(event);
+          if (event.defaultPrevented || fromNestedControl(event)) return;
+          if (event.key !== "Enter" && event.key !== " ") return;
+          // Space would scroll the page; Enter in a nested form would submit it.
+          event.preventDefault();
+          onActivate();
+        }}
+        {...rest}
+      />
+    );
+  },
 );
 StyledRow.displayName = "StyledTable.Row";
 
