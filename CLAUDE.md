@@ -1323,6 +1323,38 @@ fail, then reverting.
   viewports and the no-step-up control passes both ways; jest has no focus
   assertion for this on purpose.
 
+## `StyledTable.Row` grows `onActivate` — the clickable row (NEH-2081, 0.42.0)
+
+Every consumer that wanted a clickable row hand-built a raw `<table>` and
+painted its own hover; one painted a fixed `#f7fafc` from `onMouseEnter`,
+unreadable in every dark theme (hopper-web, NEH-2080). The shape that invites
+the mistake was the only one on offer. `onActivate` is the other shape, and it
+is additive: a row without it is byte-identical to 0.41.0.
+
+- **The row keeps its native `row` role.** Overriding it to `button` would take
+  the cells out of the table's accessibility tree; a screen reader announces
+  the cells' content instead, and `aria-label` is the hook for a row whose
+  cells do not say what activation does.
+- **Hover and `:focus-visible` paint the `boxBgSecondary`/`textSecondary`
+  pair, in the same rule** (NEH-1788: a state is a pairing too), plus an
+  outline on focus so the state is never colour alone. Measured in Chromium
+  across the 18 SYSTEM theme/modes, hovered and focused, in
+  `StyledTable.interactive.ct.tsx` — every one clears AA because the pair is
+  the host's own validated contract pair, not a colour this package chose.
+- **48px, stated as `height`**, because a `<tr>` ignores `min-height` and
+  treats `height` as a minimum. Measured at all four viewports.
+- **A click or key from a control inside the row belongs to that control.**
+  `fromNestedControl` walks `closest()` for `a[href]`, `button`, inputs and
+  `[role=button]`; without it a "Reset password" button in a cell would also
+  open the row. Enter and Space are prevented (Space scrolls, Enter in a
+  nested form submits); any other key is not an activation.
+- **A `StyledText` inside a cell will not follow the hover** — it states
+  `textPrimary` itself, the `StyledButton` caveat one level down. Say
+  `color="inherit"` on it, or let the cell's text inherit.
+
+hopper-web's migration of `user-admin-widget.tsx` and its other hand-built
+clickable tables is a separate PR, after the publish.
+
 ## A wrapper between a prop and the element it describes (NEH-1475)
 
 The section above says a component must not accept a prop it cannot honour.

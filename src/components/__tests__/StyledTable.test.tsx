@@ -132,3 +132,104 @@ describe("StyledTable", () => {
     expect(StyledTable.Caption.displayName).toBe("StyledTable.Caption");
   });
 });
+
+/**
+ * `StyledTable.Row onActivate` — the wiring half (NEH-2081). What it paints,
+ * and whether the painted text is legible, is `StyledTable.interactive.ct.tsx`.
+ */
+describe("StyledTable.Row onActivate", () => {
+  const { fireEvent } = jest.requireActual<typeof import("@testing-library/react")>(
+    "@testing-library/react",
+  );
+
+  function renderRows(onActivate: () => void) {
+    render(
+      <StyledTable>
+        <StyledTable.Body>
+          <StyledTable.Row data-testid="interactive" onActivate={onActivate}>
+            <StyledTable.Cell>Ada</StyledTable.Cell>
+            <StyledTable.Cell>
+              <button type="button" data-testid="nested">
+                Reset
+              </button>
+              <input aria-label="Note" data-testid="nested-input" />
+            </StyledTable.Cell>
+          </StyledTable.Row>
+          <StyledTable.Row data-testid="plain">
+            <StyledTable.Cell>Grace</StyledTable.Cell>
+          </StyledTable.Row>
+        </StyledTable.Body>
+      </StyledTable>,
+    );
+    return {
+      row: screen.getByTestId("interactive"),
+      plain: screen.getByTestId("plain"),
+    };
+  }
+
+  it("keeps the row role and puts the row in the tab order; a plain row is untouched", () => {
+    const { row, plain } = renderRows(() => {});
+    // The native role, not an attribute: a `<tr>` is a row by construction,
+    // and nothing here overrides it to `button`.
+    expect(row).not.toHaveAttribute("role");
+    expect(screen.getAllByRole("row")).toContain(row);
+    expect(row).toHaveAttribute("tabindex", "0");
+    expect(row).toHaveAttribute("data-interactive");
+    expect(plain).not.toHaveAttribute("tabindex");
+    expect(plain).not.toHaveAttribute("data-interactive");
+    // Still a row of the table, not a control lifted out of it.
+    expect(screen.getAllByRole("row")).toHaveLength(2);
+  });
+
+  it("activates on click, Enter and Space, and Space does not scroll the page", () => {
+    const onActivate = jest.fn();
+    const { row } = renderRows(onActivate);
+    fireEvent.click(row);
+    expect(onActivate).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(row, { key: "Enter" });
+    expect(onActivate).toHaveBeenCalledTimes(2);
+    const space = fireEvent.keyDown(row, { key: " " });
+    expect(onActivate).toHaveBeenCalledTimes(3);
+    // `fireEvent` returns false when the default was prevented.
+    expect(space).toBe(false);
+    // Any other key is not an activation.
+    fireEvent.keyDown(row, { key: "ArrowDown" });
+    expect(onActivate).toHaveBeenCalledTimes(3);
+  });
+
+  it("a click or key from a control inside the row belongs to that control", () => {
+    const onActivate = jest.fn();
+    renderRows(onActivate);
+    fireEvent.click(screen.getByTestId("nested"));
+    fireEvent.keyDown(screen.getByTestId("nested"), { key: "Enter" });
+    fireEvent.keyDown(screen.getByTestId("nested-input"), { key: " " });
+    expect(onActivate).not.toHaveBeenCalled();
+    // ...but a click on a plain cell is the row's.
+    fireEvent.click(screen.getByText("Ada"));
+    expect(onActivate).toHaveBeenCalledTimes(1);
+  });
+
+  it("composes with a caller's own handlers and honours their preventDefault", () => {
+    const onActivate = jest.fn();
+    const onClick = jest.fn((event: React.MouseEvent) => event.preventDefault());
+    render(
+      <StyledTable>
+        <StyledTable.Body>
+          <StyledTable.Row data-testid="r" onActivate={onActivate} onClick={onClick} tabIndex={-1}>
+            <StyledTable.Cell>Ada</StyledTable.Cell>
+          </StyledTable.Row>
+        </StyledTable.Body>
+      </StyledTable>,
+    );
+    const row = screen.getByTestId("r");
+    expect(row).toHaveAttribute("tabindex", "-1");
+    fireEvent.click(row);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onActivate).not.toHaveBeenCalled();
+  });
+
+  it("without onActivate a row accepts no interactive variant and forwards nothing extra", () => {
+    const { plain } = renderRows(() => {});
+    expect(plain.className).not.toMatch(/interactive/);
+  });
+});
