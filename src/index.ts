@@ -22,6 +22,7 @@ export {
   useFontSizeScale,
   useIconSize,
   useLinkComponent,
+  useNoHoverTooltip,
   useResolvedVariant,
   DEFAULT_STYLE_CONFIG,
 } from "./config/style-config";
@@ -221,6 +222,8 @@ export { default as StyledTooltip } from "./components/StyledTooltip";
 // that renders its own hover-revealed affordance has the identical problem, and
 // re-deriving "can this device hover" per app is how two answers appear.
 export { useCanHover } from "./config/can-hover";
+export { NO_HOVER_TOOLTIP_MODES } from "./config/types";
+export type { NoHoverTooltipMode } from "./config/types";
 export type { StyledTooltipProps } from "./components/StyledTooltip";
 
 // ---------------------------------------------------------------------------

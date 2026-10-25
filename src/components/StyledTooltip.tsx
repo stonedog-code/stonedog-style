@@ -8,7 +8,7 @@ import StyledText from "./StyledText";
 import type { AllowedVariant } from "../config/types";
 import { tooltipRecipe } from "styled-system/recipes";
 import { useCanHover } from "../config/can-hover";
-import { useResolvedVariant } from "../config/style-config";
+import { useNoHoverTooltip, useResolvedVariant } from "../config/style-config";
 
 const TooltipTrigger = styled("div", {
   base: {
@@ -188,9 +188,18 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
    * So `hover` becomes `click` there, which renders the explicit control the
    * click path already has. This only ever changes cases that were broken:
    * `click` is unaffected, and a device that can hover is unaffected.
+   *
+   * Unless the host has opted out (NEH-2015). `noHoverTooltip="focus-only"` on
+   * the provider keeps hover mode on such a device — keyboard focus is then
+   * the only way in, and no control is rendered — for a host asserting that
+   * every tooltipped control already carries its own name, so the tooltip is
+   * an optional sentence and a row of "?" circles costs more than it reveals.
+   * HopperGuard used to get this by patching `matchMedia` from the app. An
+   * explicit `trigger="click"` is never overridden by it.
    */
   const canHover = useCanHover();
-  const isClick = trigger === "click" || !canHover;
+  const noHoverTooltip = useNoHoverTooltip();
+  const isClick = trigger === "click" || (!canHover && noHoverTooltip === "click");
 
 
   // The child may be any component (StyledIconButton, a link, a bare span), so
@@ -260,8 +269,9 @@ const StyledTooltip: React.FC<StyledTooltipProps> = ({
    *         <button aria-label="More information">?</button>   <- invalid
    *
    * `<button>` cannot be a descendant of `<button>`, and this is not a
-   * preference anybody opted into: `isClick` is `trigger === "click" ||
-   * !canHover`, so it is the DEFAULT rendering on every phone and tablet.
+   * preference anybody opted into: an unset trigger becomes click mode
+   * wherever hover is impossible, so under the default `noHoverTooltip` it is
+   * the rendering on every phone and tablet.
    *
    * Simply not rendering the control would trade invalid HTML for an
    * unreachable explanation — on a device that cannot hover there is no hover,

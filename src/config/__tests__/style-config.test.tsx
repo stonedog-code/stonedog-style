@@ -4,6 +4,7 @@ import {
   StonedogStyleProvider,
   useFontSizeScale,
   useIconSize,
+  useNoHoverTooltip,
   useResolvedVariant,
   useStyleConfig,
   DEFAULT_STYLE_CONFIG,
@@ -126,5 +127,27 @@ describe("useResolvedVariant", () => {
     // e.g. a variant name written to storage by an older release.
     const { result } = renderHook(() => useResolvedVariant("art-deco"));
     expect(result.current).toBe("solid");
+  });
+});
+
+describe("useNoHoverTooltip", () => {
+  it("defaults to the help control, which is what every consumer rendered before the field existed", () => {
+    const { result } = renderHook(() => useNoHoverTooltip());
+    expect(result.current).toBe("click");
+    expect(DEFAULT_STYLE_CONFIG.noHoverTooltip).toBe("click");
+  });
+
+  it("returns the host's opt-out", () => {
+    const { result } = renderHook(() => useNoHoverTooltip(), {
+      wrapper: withConfig({ noHoverTooltip: "focus-only" }),
+    });
+    expect(result.current).toBe("focus-only");
+  });
+
+  it("is unaffected by the other settings", () => {
+    const { result } = renderHook(() => useNoHoverTooltip(), {
+      wrapper: withConfig({ fontSizeProfile: "xs", variant: "aurora", iconSize: "md" }),
+    });
+    expect(result.current).toBe("click");
   });
 });
