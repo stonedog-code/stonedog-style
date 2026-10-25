@@ -1,5 +1,7 @@
 import { render, screen, fireEvent, act } from "@testing-library/react";
+import type { ReactElement } from "react";
 import StyledTooltip from "../StyledTooltip";
+import { StonedogStyleProvider } from "../../config/style-config";
 
 /**
  * The tooltip opens after a delay, so every assertion has to push timers.
@@ -404,6 +406,84 @@ describe("StyledTooltip — devices that cannot hover", () => {
     expect(
       screen.queryByRole("button", { name: "What does Calendar do?" }),
     ).not.toBeInTheDocument();
+  });
+
+  /**
+   * The host's opt-out (NEH-2015).
+   *
+   * A touch laptop reports `(hover: none)`, so every tooltipped control grew
+   * a 48px "?" beside it — a row of circles across a header whose buttons all
+   * carried their own names already. HopperGuard removed them by patching
+   * `matchMedia` from the app. `noHoverTooltip="focus-only"` is the seam that
+   * replaces the patch: hover mode stays, keyboard focus is the one way in,
+   * and nothing is rendered.
+   */
+  describe("a host that opts out of the help control", () => {
+    const focusOnly = (ui: ReactElement) =>
+      render(<StonedogStyleProvider noHoverTooltip="focus-only">{ui}</StonedogStyleProvider>);
+
+    it("control: the default on the same device still renders the help control", () => {
+      // Through the provider rather than bare, so the absence below is the
+      // option's doing and not the provider's.
+      setHoverCapability(false);
+      render(
+        <StonedogStyleProvider>
+          <StyledTooltip tooltip="What this does" helpLabel="What does Calendar do?">
+            <button type="button">Calendar</button>
+          </StyledTooltip>
+        </StonedogStyleProvider>,
+      );
+      expect(screen.getByRole("button", { name: "What does Calendar do?" })).toBeInTheDocument();
+    });
+
+    it("renders no help control", () => {
+      setHoverCapability(false);
+      focusOnly(
+        <StyledTooltip tooltip="What this does" helpLabel="What does Calendar do?">
+          <button type="button">Calendar</button>
+        </StyledTooltip>,
+      );
+      expect(
+        screen.queryByRole("button", { name: "What does Calendar do?" }),
+      ).not.toBeInTheDocument();
+      // Exactly one button: the control itself, with its own name intact.
+      expect(screen.getAllByRole("button")).toHaveLength(1);
+      expect(screen.getByRole("button", { name: "Calendar" })).toBeInTheDocument();
+    });
+
+    it("still opens on keyboard focus — the one way in that remains", () => {
+      setHoverCapability(false);
+      focusOnly(
+        <StyledTooltip tooltip="What this does">
+          <button type="button">Calendar</button>
+        </StyledTooltip>,
+      );
+      openBy(fireEvent.focus, screen.getByRole("button").parentElement!);
+      expect(screen.getByRole("tooltip")).toHaveTextContent("What this does");
+    });
+
+    it("does not override an explicit click trigger", () => {
+      // The option decides what an UNSET trigger means where hover is
+      // impossible. A call site that asked for the control keeps it.
+      setHoverCapability(false);
+      focusOnly(
+        <StyledTooltip tooltip="What this does" trigger="click" helpLabel="What does Calendar do?">
+          <button type="button">Calendar</button>
+        </StyledTooltip>,
+      );
+      expect(screen.getByRole("button", { name: "What does Calendar do?" })).toBeInTheDocument();
+    });
+
+    it("changes nothing on a device that can hover", () => {
+      setHoverCapability(true);
+      focusOnly(
+        <StyledTooltip tooltip="What this does">
+          <button type="button">Calendar</button>
+        </StyledTooltip>,
+      );
+      openBy(fireEvent.mouseEnter, screen.getByRole("button").parentElement!);
+      expect(screen.getByRole("tooltip")).toHaveTextContent("What this does");
+    });
   });
 });
 

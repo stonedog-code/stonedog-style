@@ -1,7 +1,13 @@
 "use client";
 
 import React, { createContext, useContext, useMemo } from "react";
-import type { DensityProfile, FontSizeProfile, IconSize, ThemeVariant } from "./types";
+import type {
+  DensityProfile,
+  FontSizeProfile,
+  IconSize,
+  NoHoverTooltipMode,
+  ThemeVariant,
+} from "./types";
 import { resolveDensityStep, type DensityBase, type DensityStep } from "./density";
 import { THEME_VARIANTS } from "./types";
 import { IntentIconProvider, type IntentIcons } from "./intent-icons";
@@ -116,6 +122,31 @@ export interface StyleConfig {
    * two navigation behaviours and no way to retune either.
    */
   linkComponent: LinkComponent;
+
+  /**
+   * What a hover-triggered tooltip does on a device whose primary input cannot
+   * hover (NEH-2015).
+   *
+   * `"click"` — the default, and what every consumer rendered before this
+   * field existed — turns an unset `trigger` into click mode there: a separate
+   * "?" help control beside the child, because there is no hover event and a
+   * tap activates the child rather than explaining it. The explanation stays
+   * reachable; the price is a 48px control beside every tooltipped thing.
+   *
+   * `"focus-only"` keeps hover mode: the tooltip still opens on keyboard focus
+   * and closes on blur, and no help control is rendered. A host chooses this
+   * when every tooltipped control already carries a visible label or an
+   * accessible name, so the tooltip is an optional sentence rather than the
+   * control's only name — and a row of "?" circles on a touch laptop costs
+   * more than that sentence is worth. HopperGuard got this effect by answering
+   * `(hover: none)` as never matching from the app; this is the seam so no host
+   * has to patch `matchMedia`.
+   *
+   * An explicit `trigger="click"` is never affected. That is a call-site
+   * decision; this field only decides what an *unset* trigger means where hover
+   * is impossible.
+   */
+  noHoverTooltip: NoHoverTooltipMode;
 }
 
 /**
@@ -146,6 +177,10 @@ export const DEFAULT_STYLE_CONFIG: StyleConfig = {
   // it navigates correctly everywhere, and a host overriding it is opting into
   // an improvement rather than repairing a default.
   linkComponent: DefaultLinkComponent,
+  // The help control. Not the quieter option, deliberately: it is what every
+  // consumer rendered before the field existed, and the opt-out is a host
+  // asserting that its controls are already named without it.
+  noHoverTooltip: "click",
 };
 
 const StyleConfigContext = createContext<StyleConfig>(DEFAULT_STYLE_CONFIG);
@@ -200,6 +235,7 @@ export function StonedogStyleProvider({
   density,
   densityBase,
   linkComponent,
+  noHoverTooltip,
   icons,
 }: StonedogStyleProviderProps) {
   const value = useMemo<StyleConfig>(
@@ -212,6 +248,7 @@ export function StonedogStyleProvider({
       density: density ?? DEFAULT_STYLE_CONFIG.density,
       densityBase: densityBase ?? DEFAULT_STYLE_CONFIG.densityBase,
       linkComponent: linkComponent ?? DEFAULT_STYLE_CONFIG.linkComponent,
+      noHoverTooltip: noHoverTooltip ?? DEFAULT_STYLE_CONFIG.noHoverTooltip,
     }),
     [
       fontSizeProfile,
@@ -221,6 +258,7 @@ export function StonedogStyleProvider({
       density,
       densityBase,
       linkComponent,
+      noHoverTooltip,
     ],
   );
 
@@ -310,6 +348,15 @@ export function useIconSize(): IconSize {
  */
 export function useLinkComponent(): LinkComponent {
   return useStyleConfig().linkComponent;
+}
+
+/**
+ * What a hover tooltip does where hover is impossible — see
+ * `StyleConfig.noHoverTooltip`. `StyledTooltip` reads it; exported so a host
+ * component with a disclosure of its own can follow the same rule.
+ */
+export function useNoHoverTooltip(): NoHoverTooltipMode {
+  return useStyleConfig().noHoverTooltip;
 }
 
 /**

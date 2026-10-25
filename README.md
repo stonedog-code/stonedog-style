@@ -307,6 +307,14 @@ the provider:
   explicit `size`. Defaults to `2x` (32px), which is large: this library came
   out of an application built for an often-elderly audience. A conventional web
   app wants `md` (20px).
+- `noHoverTooltip` — `click | focus-only` (0.43.0). What a hover tooltip does
+  on a device whose primary input cannot hover. `click`, the default, renders
+  a "?" help control beside the child so the explanation stays reachable by
+  touch. `focus-only` renders no control and leaves the tooltip reachable by
+  keyboard focus alone — choose it when every tooltipped control already has
+  a visible label or an accessible name, so a row of help circles on a touch
+  laptop costs more than the optional sentence they reveal. An explicit
+  `trigger="click"` at a call site is never overridden.
 
 ### Retuning the scale for your audience
 

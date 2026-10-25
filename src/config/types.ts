@@ -135,3 +135,12 @@ export function isDensityProfile(value: unknown): value is DensityProfile {
 export function isIconSize(value: unknown): value is IconSize {
   return ICON_SIZES.includes(value as IconSize);
 }
+
+/**
+ * What a hover-triggered tooltip does on a device whose primary input cannot
+ * hover (NEH-2015). `click` renders the "?" help control beside the child;
+ * `focus-only` keeps hover mode, so the tooltip is reachable by keyboard focus
+ * and by nothing else. See `StyleConfig.noHoverTooltip`.
+ */
+export const NO_HOVER_TOOLTIP_MODES = ["click", "focus-only"] as const;
+export type NoHoverTooltipMode = (typeof NO_HOVER_TOOLTIP_MODES)[number];
