@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
+import { isTransparent } from "./__tests__/fixtures/colour";
 import { ListHarness } from "./StyledList.harness";
 
 /**
@@ -77,7 +78,7 @@ test.describe("StyledList — text is paired with its surface", () => {
         });
 
       // Nothing is painted — not a colour, and not the dead gradient either.
-      expect(background).toBe("rgba(0, 0, 0, 0)");
+      expect(isTransparent(background)).toBe(true);
       expect(image).toBe("none");
       // And the row takes the harness page's own black, which is the whole
       // point: on an unpainted surface the host's pairing is the right one.

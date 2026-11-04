@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
+import { isTransparent } from "./__tests__/fixtures/colour";
 import { DefinitionListHarness } from "./StyledDefinitionList.harness";
 
 /**
@@ -45,8 +46,7 @@ test.describe("StyledDefinitionList", () => {
       .first()
       .evaluate((el) => getComputedStyle(el).borderBottomColor);
 
-    expect(colour).not.toBe("rgba(0, 0, 0, 0)");
-    expect(colour).not.toBe("transparent");
+    expect(isTransparent(colour)).toBe(false);
   });
 
   test("lays terms and definitions out in two columns", async ({ mount }) => {
@@ -71,6 +71,6 @@ test.describe("StyledDefinitionList", () => {
     );
     // `solid` sets `bg: boxBgAccent`. An undefined token renders nothing —
     // which is exactly what NEH-301 found across nine declarations.
-    expect(bg).not.toBe("rgba(0, 0, 0, 0)");
+    expect(isTransparent(bg)).toBe(false);
   });
 });

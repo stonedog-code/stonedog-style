@@ -1355,6 +1355,66 @@ is additive: a row without it is byte-identical to 0.41.0.
 hopper-web's migration of `user-admin-widget.tsx` and its other hand-built
 clickable tables is a separate PR, after the publish.
 
+## Panda 2 in the toolchain; slot recipes registered where the docs say (NEH-2155, 0.44.0)
+
+The dev toolchain moved to `@pandacss/dev` 2.5.0. The peer range stays
+`>=1.9.0`, and that is a measured claim, not a hope: the preset's generated
+output on 1.12.1 is byte-identical before and after this change except the
+order of `styled-system/recipes/index.*` exports, and 1.9.1 (hopper-web's
+floor) generates the same slot classes and slot-map types. **The preset source
+must stay valid on both majors** — every host compiles `src/preset/**` against
+its own Panda, and all of them were on 1.x when this landed.
+
+**The ticket said "port the slot-recipe consumers"; the measurement said
+"register them correctly".** All 25 recipes sat under `theme.recipes`, with a
+comment saying Panda accepted the six `defineSlotRecipe` ones there and that
+moving them to `slotRecipes` was deliberately not done. Panda 1 noticed the
+`slots` key and generated a slot recipe anyway. Panda 2 does not look: under
+`recipes` they became plain recipes, `root`/`item`/`region` were emitted as CSS
+*properties* (codegen's `nested_property` warning said so, in as many words),
+the generated function returned one class string, and every `classes.root`
+in the components was one of 32 type errors and an unstyled element. Moving
+the six to `theme.slotRecipes` fixed all 32 with no component touched. The
+public `stonedogStyleRecipes` map still holds all 25.
+
+Two things Panda 2 changed that the test suites keyed on, both now read in
+either form:
+
+- **`@pandacss/dev` is ESM-only, and Jest runs CJS.** The preset suites died
+  with "unexpected token" on its `dist/index.js`. `jest.config.cjs` maps the
+  bare specifier to the package's **own** `dist/define.cjs` — the real
+  `definePreset`/`defineRecipe`/`defineSlotRecipe`, not a mock; `tsc` still
+  resolves the real package, so a helper that build lacks is a type error.
+- **A `token/50` blend is written straight into the property.** Panda 1 wrote
+  `--mix-background: color-mix(in srgb, …)` plus `background: var(--mix-…)`;
+  Panda 2 writes `background: color-mix(in oklab, …)`. The surface-pairing
+  suites parse both (`blendOf`/`surfaceOf`), and the two `paintOf` helpers
+  treat an inline `color-mix` as unreadable exactly as they treated the
+  variable — an unreadable surface is a failure, never a pass.
+- **The `transparent` token is `oklch(0 0 0 / 0)`, not `rgb(0 0 0 / 0)`.**
+  Chromium reads a computed colour back in the space it was declared in, so
+  every `bg: "transparent"` surface measured `oklch(0 0 0 / 0)` and twelve
+  component tests asserting the string `rgba(0, 0, 0, 0)` failed — while the
+  seven asserting `.not.toBe("rgba(0, 0, 0, 0)")` would have passed over a
+  transparent-by-token element without looking. All of them now ask
+  `isTransparent()` (`src/components/__tests__/fixtures/colour.ts`), which
+  reads the alpha in any syntax and refuses an unparseable string in both
+  directions; `colour.test.ts` plants a real paint, a half-opaque one and an
+  empty read.
+
+The stylesheet also lost the `*,::before,::after,::backdrop` variable reset and
+four junk utilities v1 extracted from JSX props (`.key_name`, `.label_Name`…),
+and gained explicit compound-variant classes for the drawer. None of that
+reaches a consumer: each host generates its own CSS from its own Panda.
+
+**Node.** Panda 2 needs Node ≥22, so `npm ci` here does too; CI is on 24.
+`engines` stays `>=20` because it describes the shipped *source*, which a
+Panda 1 host on Node 20 can still consume.
+
+**Not done here:** `npm audit` still lists 13 dev-only findings, all in the
+jest 29 / typescript-eslint 8 / minimatch chains and none fixable without a
+major of those; the Panda-chain findings NEH-2155 was split out for are gone.
+
 ## A wrapper between a prop and the element it describes (NEH-1475)
 
 The section above says a component must not accept a prop it cannot honour.

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
+import { isTransparent } from "./__tests__/fixtures/colour";
 import StyledFieldset from "./StyledFieldset";
 
 /**
@@ -37,7 +38,7 @@ test.describe("StyledFieldset", () => {
     // bare <fieldset>: a 2px groove border and 0.35em padding, with no
     // background. The border check is deliberately not "is non-zero" — a naked
     // fieldset HAS a border — so the background is what proves the recipe ran.
-    expect(styles.background).not.toBe("rgba(0, 0, 0, 0)");
+    expect(isTransparent(styles.background)).toBe(false);
     expect(styles.padding).not.toBe("0px");
     expect(styles.border).not.toBe("0px");
   });

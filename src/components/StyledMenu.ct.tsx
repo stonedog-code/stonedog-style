@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
+import { isTransparent } from "./__tests__/fixtures/colour";
 import type { Locator } from "@playwright/test";
 import { MenuSwitcher, MenuAccount, MenuLocked } from "./StyledMenu.harness";
 
@@ -148,7 +149,7 @@ test.describe("keyboard and focus", () => {
     expect(f.outline).not.toBe("none");
     expect(f.width).toBeGreaterThan(0);
     expect(f.bg).not.toBe(r.bg);
-    expect(r.bg).toBe("rgba(0, 0, 0, 0)");
+    expect(isTransparent(r.bg)).toBe(true);
   });
 
   test("choosing an item switches, closes, and returns focus to the trigger", async ({

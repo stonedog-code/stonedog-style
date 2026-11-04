@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
+import { isTransparent } from "./__tests__/fixtures/colour";
 import StyledConfetti from "./StyledConfetti";
 
 /**
@@ -47,7 +48,7 @@ test("the particles are actually painted", async ({ mount }) => {
   expect(background).not.toBe("");
   // `rgba(0, 0, 0, 0)` is what an undefined token resolves to — the exact
   // symptom of the extraction failure above.
-  expect(background).not.toBe("rgba(0, 0, 0, 0)");
+  expect(isTransparent(background)).toBe(false);
 });
 
 test("an animation is running on each particle", async ({ mount }) => {
@@ -76,5 +77,5 @@ test("emoji particles carry no coloured square behind the glyph", async ({
     .first()
     .evaluate((el) => getComputedStyle(el).backgroundColor);
 
-  expect(background).toBe("rgba(0, 0, 0, 0)");
+  expect(isTransparent(background)).toBe(true);
 });

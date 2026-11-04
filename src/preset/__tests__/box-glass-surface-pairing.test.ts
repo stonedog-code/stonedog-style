@@ -108,22 +108,22 @@ const FIXTURE_VAR: Record<string, BoxVar> = {
 /**
  * The surface a rule paints, as `{ token, alpha }`.
  *
- * Panda writes `bg: "x/60"` as
+ * Panda 1 wrote `bg: "x/60"` as
  *   --mix-background: color-mix(in srgb, var(--colors-x) 60%, transparent);
  *   background: var(--mix-background, var(--colors-x));
- * so a `--mix-background` declaration is what decides the alpha. Anything this
- * cannot read returns null, and the caller treats that as a failure — an
- * unreadable surface scored as a pass is the empty-set green.
+ * and Panda 2 writes it as
+ *   background: color-mix(in oklab, var(--colors-x) 60%, transparent);
+ * so the alpha is decided by whichever of those carries the `color-mix()`
+ * (NEH-2155). Anything this cannot read returns null, and the caller treats
+ * that as a failure — an unreadable surface scored as a pass is the empty-set
+ * green.
  */
 function surfaceOf(decls: Record<string, string>): { token: string; alpha: number } | null {
-  const mix = decls["--mix-background"];
-  if (mix) {
-    const m = /color-mix\(in srgb,\s*(var\(--colors-[a-z0-9-]+\))\s+(\d+(?:\.\d+)?)%,\s*transparent\)/i.exec(mix);
-    return m ? { token: m[1]!, alpha: Number(m[2]) / 100 } : null;
-  }
-  const bg = decls["background-color"] ?? decls["background"];
-  if (!bg) return null;
-  const plain = /^(var\(--colors-[a-z0-9-]+\))$/i.exec(bg.trim());
+  const paint = decls["--mix-background"] ?? decls["background-color"] ?? decls["background"];
+  if (!paint) return null;
+  const m = /^color-mix\(in \w+,\s*(var\(--colors-[a-z0-9-]+\))\s+(\d+(?:\.\d+)?)%,\s*transparent\)$/i.exec(paint.trim());
+  if (m) return { token: m[1]!, alpha: Number(m[2]) / 100 };
+  const plain = /^(var\(--colors-[a-z0-9-]+\))$/i.exec(paint.trim());
   return plain ? { token: plain[1]!, alpha: 1 } : null;
 }
 
@@ -207,6 +207,7 @@ describe("box glass paints an opaque surface with its paired text (NEH-1952)", (
     expect(surface).not.toBeNull();
     expect(surface!.alpha).toBe(1);
     expect(glass["--mix-background"]).toBeUndefined();
+    expect(glass["background"]).not.toContain("color-mix");
   });
 
   it("states the text token the contract pairs with that surface", () => {
