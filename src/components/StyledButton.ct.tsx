@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
+import { isTransparent } from "./__tests__/fixtures/colour";
 import StyledButton from "./StyledButton";
 import StyledBox from "./StyledBox";
 import StyledText from "./StyledText";
@@ -125,7 +126,7 @@ test.describe("link does not render on the user agent's ButtonFace (NEH-307)", (
 
     // Transparent, so the themed surface behind the button shows through —
     // the same result `unstyled` already gets by stating it.
-    expect(bg).toBe("rgba(0, 0, 0, 0)");
+    expect(isTransparent(bg)).toBe(true);
   });
 
   test("keeps that background when the UA colour scheme flips", async ({ mount, page }) => {
@@ -147,7 +148,7 @@ test.describe("link does not render on the user agent's ButtonFace (NEH-307)", (
     const dark = await read();
 
     expect(dark).toBe(light);
-    expect(light).toBe("rgba(0, 0, 0, 0)");
+    expect(isTransparent(light)).toBe(true);
   });
 
   test("its background is stated by the recipe, not left to the browser", async ({ mount, page }) => {

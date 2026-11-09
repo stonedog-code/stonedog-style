@@ -57,16 +57,34 @@ export interface StonedogStylePresetOptions {
 /**
  * Every recipe, keyed by the name it is exported under in `styled-system/recipes`.
  *
- * Six of these (`alertRecipe`, `listRecipe`, `menuRecipe`, `inputBoolRecipe`,
- * `inputRadioRootRecipe`, `toastRecipe`) are slot recipes declared with
- * `defineSlotRecipe`.
- * Panda accepts them here rather than under `slotRecipes` and generates them
- * correctly — verified against HopperGuard's own generated output. Moving them
- * to `slotRecipes` would be more "correct" by the docs and would change the
- * generated surface, so it is deliberately not done during extraction.
+ * Two maps, because Panda has two theme keys and only one of them produces a
+ * slot map. The six declared with `defineSlotRecipe` (`alertRecipe`,
+ * `listRecipe`, `menuRecipe`, `inputBoolRecipe`, `inputRadioRootRecipe`,
+ * `toastRecipe`) go under `theme.slotRecipes`; everything else under
+ * `theme.recipes`.
+ *
+ * Until NEH-2155 all 25 sat under `recipes`. Panda 1 noticed the `slots` key
+ * and generated a slot recipe anyway, so it was "verified against HopperGuard's
+ * generated output" and deliberately left alone. Panda 2 does not look: a
+ * recipe under `recipes` is a plain recipe, so `root`, `item` and `region`
+ * became CSS *properties* (codegen warns `nested_property … emitted as a CSS
+ * property and the styles under it never apply`), the generated function
+ * returned one class string, and every `classes.root` in the components was a
+ * type error and an unstyled element. Registering them where the docs always
+ * said is valid on both majors, and the generated class names (`alert__root`
+ * and friends) are identical on each — asserted by the token-contract suite
+ * against the stylesheet rather than assumed.
  */
-const recipes = {
+const slotRecipes = {
   alertRecipe,
+  inputBoolRecipe,
+  inputRadioRootRecipe,
+  listRecipe,
+  menuRecipe,
+  toastRecipe,
+};
+
+const plainRecipes = {
   arrowRecipe,
   boxRecipe,
   buttonRecipe,
@@ -75,23 +93,21 @@ const recipes = {
   drawerRecipe,
   formRecipe,
   iconRecipe,
-  inputBoolRecipe,
   inputDropdownRecipe,
   inputDropdownContentRecipe,
   inputDropdownItemRecipe,
-  inputRadioRootRecipe,
   inputTextRecipe,
-  listRecipe,
-  menuRecipe,
   separatorHorizontalRecipe,
   separatorVerticalRecipe,
   stackRecipe,
   stripedRecipe,
   tagRecipe,
   textRecipe,
-  toastRecipe,
   tooltipRecipe,
 };
+
+/** The public map: every recipe of either kind, as consumers have always seen it. */
+const recipes = { ...plainRecipes, ...slotRecipes };
 
 /**
  * Force every variant of every recipe into the stylesheet.
@@ -243,7 +259,8 @@ export function stonedogStylePreset(options: StonedogStylePresetOptions = {}) {
             },
           },
         },
-        recipes,
+        recipes: plainRecipes,
+        slotRecipes,
       },
     },
     staticCss: {

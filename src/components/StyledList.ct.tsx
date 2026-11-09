@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
+import { isTransparent } from "./__tests__/fixtures/colour";
 import {
   ListHarness,
   ListFragmentHarness,
@@ -81,7 +82,7 @@ test.describe("StyledList", () => {
     const bg = await component.evaluate(
       (el) => getComputedStyle(el).backgroundColor,
     );
-    expect(bg).not.toBe("rgba(0, 0, 0, 0)");
+    expect(isTransparent(bg)).toBe(false);
   });
 
   test("a row rendered inside a fragment is styled like the others", async ({

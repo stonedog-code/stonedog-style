@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
+import { isTransparent } from "./__tests__/fixtures/colour";
 import type { Locator } from "@playwright/test";
 import { FieldForm, FieldHandRolled } from "./StyledField.harness";
 
@@ -104,7 +105,7 @@ test.describe("the error region", () => {
       return { actual: getComputedStyle(el).color, expected };
     });
     expect(colours.actual).toBe(colours.expected);
-    expect(colours.actual).not.toBe("rgba(0, 0, 0, 0)");
+    expect(isTransparent(colours.actual)).toBe(false);
   });
 });
 

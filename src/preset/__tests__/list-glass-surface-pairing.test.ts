@@ -82,6 +82,8 @@ function paintOf(decls: Record<string, string>): { rgb: Rgb; alpha: number } | "
   if (decls["--mix-background"]) return null;
   const bg = decls["background-color"] ?? decls["background"];
   if (bg === undefined || bg === "transparent" || bg === "none") return "none";
+  // Panda 2 writes a `token/NN` blend straight into the property (NEH-2155).
+  if (bg.includes("color-mix")) return null;
   const m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*(\d*\.?\d+)\s*)?\)$/i.exec(bg.trim());
   if (!m) return null;
   return { rgb: [Number(m[1]), Number(m[2]), Number(m[3])], alpha: m[4] === undefined ? 1 : Number(m[4]) };

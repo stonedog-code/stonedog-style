@@ -38,6 +38,12 @@ lockfile in any way you'd notice.
 
 Peer dependencies: `react` ≥18, `react-dom` ≥18, `@pandacss/dev` ≥1.9.
 
+The preset generates the same classes on Panda 1 and Panda 2 — verified
+against `@pandacss/dev` 1.9.1, 1.12.1 and 2.5.0. One thing changes for a
+host moving to Panda 2: it no longer adds `@pandacss/preset-base` for you, so
+the two base presets in the config below stop being merely required-by-us and
+become required-by-Panda. The config below already lists them.
+
 ## Setup
 
 Four steps. **All four are required** — miss step 3 or 4 and the app renders,

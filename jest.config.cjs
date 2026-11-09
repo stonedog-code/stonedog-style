@@ -9,6 +9,15 @@ module.exports = {
     // baseUrl, so it needs the mapping spelled out or every component import
     // dies with "Cannot find module 'styled-system/jsx'".
     "^styled-system/(.*)$": "<rootDir>/styled-system/$1",
+    // `@pandacss/dev` is ESM-only since Panda 2 and Jest here runs CJS, so the
+    // preset suites (which import `definePreset`/`defineRecipe`/
+    // `defineSlotRecipe` through `src/preset/**`) died with "Jest encountered
+    // an unexpected token" on its `dist/index.js`. The package ships its own
+    // CommonJS build of exactly those helpers at `dist/define.cjs` — the real
+    // module, not a mock — and that is the whole of what the preset imports.
+    // tsc still resolves the package normally, so a helper the preset uses
+    // that this build lacks is a type error, not a silent stub (NEH-2155).
+    "^@pandacss/dev$": "<rootDir>/node_modules/@pandacss/dev/dist/define.cjs",
   },
   // `.mjs` is listed so the generated styled-system resolves and, below, gets
   // transformed. Without it Jest cannot even find `styled-system/jsx`.

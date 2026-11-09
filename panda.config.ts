@@ -23,6 +23,11 @@ export default defineConfig({
    * `gray.*`, `radii.xl`, the spacing scale — and Panda drops those
    * declarations silently, with no error at build time and no error in the
    * browser. It just renders wrong.
+   *
+   * Since Panda 2 this is not only our rule but Panda's: v1 added
+   * `@pandacss/preset-base` on its own when `presets` was set, v2 adds
+   * nothing, and both base presets are explicit devDependencies here for
+   * that reason (NEH-2155).
    */
   presets: ["@pandacss/preset-base", "@pandacss/preset-panda", stonedogStylePreset()],
   include: ["./src/**/*.{ts,tsx}"],

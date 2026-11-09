@@ -128,6 +128,21 @@ function declarationsFor(css: string, selector: string): Declarations {
  */
 const INVALID_IMAGE = /^linear\(/i;
 
+/**
+ * A translucent surface — `bg: "token/50"` — as `{ token, percent }`, or null
+ * when the rule paints a flat fill. Panda 1 wrote the blend through a
+ * `--mix-background` custom property and `background: var(--mix-background,
+ * …)`; Panda 2 writes the `color-mix()` straight into `background` and blends
+ * in oklab rather than srgb. Both are the same surface, so both are read
+ * (NEH-2155).
+ */
+const BLEND = /color-mix\(in \w+,\s*(var\(--colors-[a-z0-9-]+\))\s+(\d+(?:\.\d+)?)%,\s*transparent\)/i;
+
+function blendOf(decls: Declarations): { token: string; percent: number } | null {
+  const m = BLEND.exec(decls["--mix-background"] ?? decls["background"] ?? "");
+  return m ? { token: m[1]!, percent: Number(m[2]) } : null;
+}
+
 function paintedSurface(decls: Declarations): string | null {
   const image = decls["background-image"];
   if (image && !INVALID_IMAGE.test(image)) return image;
@@ -336,7 +351,7 @@ describe("matte paints buttonBgAccent, so it states buttonTextAccent (NEH-881)",
     // answer and the recipe already has it.
     const base = declarationsFor(styles, ".iconButton--variant_ghost");
     expect(base["color"]).toBe("var(--colors-text-primary)");
-    expect(base["background"]).toContain("--mix-background");
+    expect(blendOf(base)).toEqual({ token: ACCENT_BG, percent: 50 });
 
     const hover = declarationsFor(styles, ".iconButton--variant_ghost:is(:hover, [data-hover])");
     expect(hover["background"]).toBe(ACCENT_BG);
