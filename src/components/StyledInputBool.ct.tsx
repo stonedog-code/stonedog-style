@@ -49,6 +49,46 @@ test.describe("StyledInputBool", () => {
     expect(outline).not.toBe("none");
   });
 
+  /**
+   * NEH-2237 — the box keeps its 48px beside a long label in a narrow row.
+   *
+   * The recipe gave the control `width: 48px` and `minHeight: 48px` and
+   * stopped. As a flex item beside its text (`flex-shrink: 1`, `min-width:
+   * auto` by default) the box was what gave way when the row was narrow:
+   * HopperGuard's anonymous WCAG sweep read it at 22×48px at 320px on a public
+   * form. WCAG 2.5.8 measures the SMALLER side, so a control that keeps its
+   * height and loses its width fails exactly as one never sized.
+   *
+   * Rendered inside a 320px column deliberately — the narrowest width this
+   * package's hosts support, and narrower than any of the four viewport
+   * projects, so the squeeze is present at all four. The label is long enough
+   * to want more than the 272px left beside a 48px box. Fails on the pre-fix
+   * recipe at 23×48; passes at 48×48.
+   */
+  test("the box keeps its 48px width beside a long label in a 320px row", async ({
+    mount,
+  }) => {
+    const component = await mount(
+      <div style={{ width: "320px" }}>
+        <StyledInputBool
+          label="I am interested in the pilot program and the case study"
+          data-testid="narrow"
+        />
+      </div>,
+    );
+    const box = await component.getByTestId("narrow").boundingBox();
+    expect(box).not.toBeNull();
+    const smaller = Math.min(box!.width, box!.height);
+    expect(
+      smaller,
+      `control measured ${Math.round(box!.width)}x${Math.round(box!.height)}px; needs 48px on the smaller side`,
+    ).toBeGreaterThanOrEqual(48);
+    // The row still fits its column: the text wrapped, the box did not shrink.
+    const row = await component.locator("label").boundingBox();
+    expect(row).not.toBeNull();
+    expect(row!.width).toBeLessThanOrEqual(320);
+  });
+
   test("a long label wraps rather than overflowing the viewport", async ({
     mount,
     page,

@@ -1415,6 +1415,32 @@ Panda 1 host on Node 20 can still consume.
 jest 29 / typescript-eslint 8 / minimatch chains and none fixable without a
 major of those; the Panda-chain findings NEH-2155 was split out for are gone.
 
+## The checkbox keeps its width beside a long label (NEH-2237, 0.45.0)
+
+`inputBoolRecipe` sized the control with `width: 48px` and `minHeight: 48px`
+and stopped. The control is a flex item in the `<label>` row beside its text,
+so with a flex item's defaults (`flex-shrink: 1`, `min-width: auto`) the box
+was what gave way in a narrow row: HopperGuard's anonymous WCAG sweep measured
+`#quote-pilot-interest` at **22×48px** at 320px on its public `/quote` form,
+and this package's own harness reads **36×48** inside a 320px column beside a
+long label. A control that keeps its height and loses its width fails WCAG
+2.5.8 on the smaller side exactly as one that was never sized.
+
+- **`minWidth: 48px` + `flexShrink: 0` on the control slot**, stated as a
+  floor for the reason `buttonRecipe` states its own (NEH-220): a box that
+  emerges from layout can be eroded by layout. The text wraps; the box does
+  not.
+- **Measured in `StyledInputBool.ct.tsx`**, inside a 320px column at all four
+  viewports. Fails on 0.44.0 at 36×48; passes at 48×48, and the row still
+  fits its column.
+- **Nothing else moves.** A checkbox in a row with room to spare was already
+  48px wide; the two declarations change only what happens when there is not.
+
+hopper-web carries the same two declarations as a
+`theme.extend.recipes.inputBoolRecipe` override in its `panda.config.ts` so
+its lane did not wait on this publish; that override is dropped when it
+installs 0.45.0.
+
 ## A wrapper between a prop and the element it describes (NEH-1475)
 
 The section above says a component must not accept a prop it cannot honour.

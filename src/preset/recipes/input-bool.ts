@@ -18,6 +18,23 @@ export const inputBoolRecipe = defineSlotRecipe({
       minHeight: "48px",
       width: "48px",
       /**
+       * The width is a FLOOR, and the box may not give it up to its label
+       * (NEH-2237).
+       *
+       * This control is a flex item in the `<label>` row beside its text, and
+       * a flex item defaults to `flex-shrink: 1` with `min-width: auto`. So a
+       * long label in a narrow row took the width out of the checkbox:
+       * HopperGuard's anonymous WCAG sweep measured a 48×48 control at
+       * **22×48px** at 320px, and its component tier read 23×48 at 320 and
+       * 29×48 at 375 with the label "I am interested in the pilot program".
+       * `width: 48px` alone is a size the layout is free to erode, exactly
+       * what `buttonRecipe` learned under NEH-220 — a floor has to be stated
+       * as a minimum. The height already was; the width now is too, and the
+       * item refuses to shrink so the row wraps the TEXT instead of the box.
+       */
+      minWidth: "48px",
+      flexShrink: 0,
+      /**
        * This slot is a native `<input type="checkbox">` at `appearance: auto`,
        * which changes what styling it is even possible to express (NEH-234).
        *
