@@ -86,7 +86,12 @@ export interface ToastOptions {
    */
   duration?: number | undefined;
   action?: ToastAction | undefined;
-  /** Render a close control. */
+  /**
+   * Render a close control. **Defaults to `true` since 0.46.0** (NEH-2262): a
+   * message the reader cannot dismiss is a message the reader cannot finish
+   * with, and the reader is the one who knows when they are finished. Pass
+   * `false` for the rare toast that must not be dismissed by hand.
+   */
   closable?: boolean | undefined;
 }
 
@@ -102,16 +107,34 @@ export interface Toast extends ToastOptions {
   dismissed: boolean;
 }
 
+/**
+ * What happens to the toast that does not fit.
+ *
+ * - `queue` — it waits, unseen, and is admitted when a slot opens. Right for a
+ *   stack that empties itself on a timer, which is every consumer before
+ *   0.46.0, and still the default.
+ * - `displace` — it goes on screen NOW and the card least worth keeping leaves
+ *   (dismissed, so it animates out). Right for a stack that stays until the
+ *   reader clears it (NEH-2262): a reader who has just saved something must
+ *   see "Saved." now, not after they dismiss a card from an hour ago. Which
+ *   card leaves follows `PRIORITY` — an error is never the one displaced while
+ *   a non-error is on screen, and among equals the oldest goes.
+ */
+export type ToastOverflow = "queue" | "displace";
+
 export interface ToasterStoreOptions {
   /**
-   * How many toasts may be on screen at once. Further ones wait in a queue and
-   * are admitted as room appears.
+   * How many toasts may be on screen at once. What happens to the next one is
+   * `overflow`'s decision.
    *
    * 24 is not a considered number — it is the value the store this replaces
    * used, kept so that the behaviour at overflow does not change silently along
-   * with everything else.
+   * with everything else. A host whose toasts persist wants something a reader
+   * can take in at a glance; HopperGuard passes 5.
    */
   max?: number;
+  /** See `ToastOverflow`. Defaults to `queue`. */
+  overflow?: ToastOverflow;
   /** How long a dismissed toast stays in the snapshot so it can animate out. */
   removeDelay?: number;
 }
@@ -189,7 +212,7 @@ const EMPTY: readonly Toast[] = Object.freeze([]);
 const inBrowser = (): boolean => typeof window !== "undefined";
 
 export function createToaster(options: ToasterStoreOptions = {}): ToasterStore {
-  const { max = 24, removeDelay = 200 } = options;
+  const { max = 24, overflow = "queue", removeDelay = 200 } = options;
 
   let toasts: readonly Toast[] = EMPTY;
   let queued: Toast[] = [];
@@ -210,11 +233,19 @@ export function createToaster(options: ToasterStoreOptions = {}): ToasterStore {
     for (const listener of [...listeners]) listener();
   };
 
+  /**
+   * The toasts a reader can still act on. A dismissed toast is in the
+   * snapshot for `removeDelay` ms so it can animate out, and it must not hold
+   * a slot while it does — six saves in two seconds would otherwise show one
+   * card and queue five behind a fading one.
+   */
+  const live = (): readonly Toast[] => toasts.filter((toast) => !toast.dismissed);
+
   /** Admit queued toasts until the screen is full again. */
   const drain = (): void => {
-    if (queued.length === 0 || toasts.length >= max) return;
+    if (queued.length === 0 || live().length >= max) return;
     queued.sort((a, b) => priorityOf(a) - priorityOf(b));
-    const admitted = queued.splice(0, max - toasts.length);
+    const admitted = queued.splice(0, max - live().length);
     // Queued toasts were created after everything on screen, so they go in
     // front; among themselves the highest priority leads.
     toasts = [...admitted, ...toasts];
@@ -265,12 +296,24 @@ export function createToaster(options: ToasterStoreOptions = {}): ToasterStore {
       id,
       type,
       duration: options.duration ?? DEFAULT_DURATIONS[type],
+      closable: options.closable ?? true,
       dismissed: false,
     };
 
-    if (toasts.length >= max) {
-      queued.push(toast);
-      return id;
+    if (live().length >= max) {
+      if (overflow === "queue") {
+        queued.push(toast);
+        return id;
+      }
+      // `displace`: make room, then fall through and show it. The leaver is
+      // the lowest-priority live toast, oldest among equals — the snapshot is
+      // newest-first, so "oldest" is the LAST of the ties. `remove()` marks it
+      // dismissed and the renderer animates it out; `live()` no longer counts
+      // it, so the new toast takes its slot in the same tick.
+      const leaver = live().reduce((worst, candidate) =>
+        priorityOf(candidate) >= priorityOf(worst) ? candidate : worst,
+      );
+      remove(leaver.id);
     }
 
     toasts = [toast, ...toasts];

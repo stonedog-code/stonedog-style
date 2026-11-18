@@ -172,6 +172,7 @@ and nothing visible until someone looks at the pixels.
 | `box glass` surface | **opaque `boxBgPrimary`** with `textPrimary` | changed in **0.39.0** (NEH-1952); before it `glass` painted `boxBgSecondary/60` — a `color-mix` with `transparent`, so the ratio depended on the page behind the box — and stated `textPrimary`, the partner of a different surface. Measured in a consumer's dashboard tiles at 2.41:1 (subtitles) and 2.51:1 (Zen-dark titles). `boxBgPrimary` because `StyledText`/`StyledHeading` inside the box state `textPrimary` themselves, so this is the surface where the DEFAULT text is the paired text; an opaque `boxBgSecondary` would have left 10 of 18 SYSTEM theme/modes below AA. **Visible**: tiles change hue to the primary surface. A host painting `textSecondary` inside a glass box (a "quiet" subtitle) is now mispaired — 8 of 18 below AA — and should drop the override |
 | `list glass` root | **paints nothing** — no background, no backdrop blur; rows sit on their container's surface | changed in **0.40.0** (NEH-2068); before it the root laid `rgba(255, 255, 255, 0.05)` behind a `blur(10px)` backdrop. On a glass tile (opaque `boxBgPrimary`) that lightened the surface under `textPrimary` rows to 4.16–4.36:1 in 4 of 18 SYSTEM theme/modes. The blur went too: over an opaque tile it blurs a flat colour into itself, over a busy page it frosts a background nothing pairs, and `backdrop-filter` still makes the list a containing block for `position: fixed` descendants. **Visible**: a glass list loses its faint white wash; borders and separators are unchanged |
 | `dl-list` / `form` / `stack` / `input-radio` `glass` | **paint nothing and pin no text colour** — no background, no backdrop blur, no `color`; the text takes its container's own pairing | changed in **0.41.0** (NEH-2075); before it each laid `rgba(255, 255, 255, 0.1)` behind a `blur(10px)` backdrop and stated `color: textPrimary`. Measured in Chromium across the 18 SYSTEM theme/modes (`glass-recipes.contrast.ct.tsx`), identically on all four: on a glass tile the tint took `textPrimary` to 3.78–3.95:1 in **4 of 18**; on the page the pinned `textPrimary` — the partner of `boxBgPrimary`, not of the page — measured **1.04:1** on two light themes and 1.18:1 on two dark ones. Removing the tint alone would have left the page placement failing, which is why the `color` went too. **Visible**: the faint white wash is gone and text inside takes the surrounding ink (on a glass tile, unchanged; on the page, `textMain` instead of `textPrimary`); borders and separators are unchanged. Found as a hypothesis in NEH-2068 and measured before anything was changed — the `form` row first read as "no failures" because its tests had timed out on a wrong mount; a timeout is not a pass. The same measurement caught a second paint on the radio path: the base recipe's **checked item** laid a literal `rgba(0, 123, 255, 0.2)` over every variant's surface, and the checked glass item read 4.23:1 (Zen dark) beside an unchecked neighbour that passed. That wash is gone too, from every variant; the checked state is still the indicator dot plus the control's border colour |
+| `StyledToaster` close control | **on every card**, as a glyph plus the visible word "Dismiss", named "Dismiss notification" | changed in **0.46.0** (NEH-2262); before it a card rendered a close control only when the call site passed `closable: true`, and HopperGuard's 549 call sites never did — the owner had three "Reading saved." cards on screen with no way to clear them. `closable: false` names the old shape per toast; `closeText={null}` drops the word. Every other prop in that release — `autoDismiss`, `collapseAfterMs`, `dismissAllLabel`'s control appearing with two cards, `overflow: "displace"` on the store — is additive: a host that passes nothing keeps the per-type timers, the queue and no fold it had in 0.45.0 |
 
 **0.27.0 finishes what 0.26.0 started, and the five components needed five
 different fixes because they were frozen five different ways.** "The recipe sets
@@ -1440,6 +1441,68 @@ hopper-web carries the same two declarations as a
 `theme.extend.recipes.inputBoolRecipe` override in its `panda.config.ts` so
 its lane did not wait on this publish; that override is dropped when it
 installs 0.45.0.
+
+## Notifications that stay until the reader says so (NEH-2262, 0.46.0)
+
+HopperGuard's owner had three "Reading saved." cards on screen and no way to
+clear them: the renderer drew a close control only on request, and no call site
+requested one. The fix is the opposite default plus the machinery a persistent
+stack needs, and the host — through a reader's setting — decides whether
+anything times out at all. PRD-0079 in `stonedog-prd/hopperguard` holds the
+spec and the Gemini review dispositions; what follows is what a reader of this
+package needs.
+
+- **`closable` defaults to `true`**, and the close control is a glyph **plus the
+  word "Dismiss"** (`closeText`, `null` for the glyph alone), named "Dismiss
+  notification" — the name contains the visible word (WCAG 2.5.3). The
+  `<button>` states `font: inherit`; without it the word sat at the user
+  agent's 13.33px beside 22px text.
+- **`autoDismiss={{ enabled, afterMs }}` on `StyledToaster` replaces every
+  per-toast duration** when passed. `enabled: false` pins every card;
+  `enabled: true` gives every card `afterMs`. Omitted, nothing changes. A
+  `loading` toast stays under every policy and **its clock starts at the
+  update** — the renderer used to seed `remaining` once at mount and never
+  re-read it, so an "Uploading…" updated to "Uploaded." kept `Infinity` and
+  never left, whatever the store's re-derived duration said. `effectiveDuration`
+  is exported so a host can assert its policy.
+- **`createToaster({ max, overflow: "displace" })`** shows the newest and
+  dismisses the card least worth keeping (the store's `PRIORITY`: never an
+  error while a non-error is up; oldest among equals) instead of queueing.
+  **A dismissed card no longer holds a slot** while it animates out — six saves
+  in two seconds used to show one card and queue five behind a fading one.
+  `overflow: "queue"` is the default and byte-identical to before.
+- **`collapseAfterMs`** folds an untouched, visible stack into one real
+  `<button>` reading `foldLabel(count)` ("Notifications (3)"). The cards stay
+  mounted with the HTML `hidden` attribute — out of the screen, the
+  accessibility tree and the tab order, clocks still running — and the recipe
+  states `&[hidden] { display: none }` because `display: flex` would otherwise
+  beat the attribute (the `StyledMenu` lesson, NEH-1816). A new toast, an
+  activation, hover, focus or a hidden tab all keep or bring the stack open.
+  There is never a "Notifications (0)": the fold renders only over a live
+  count above zero.
+- **"Dismiss all"** (`dismissAllLabel`, `null` to remove) is the host's own
+  `StyledButton` in a `toolbar` slot that re-enables pointer events, shown with
+  two or more live cards, nearest the corner.
+- **A keyboard dismissal leaves focus somewhere visible.** A click with
+  `detail === 0` is the keyboard; focus goes to the newest remaining card's
+  close control, else to where focus came from (recorded on the region's
+  `focusin`, with `<body>` counted as nowhere), else to the first match of
+  `returnFocusSelector` (`main, [role='main']`, given `tabindex="-1"` for the
+  moment). Never `<body>` (2.4.3, 2.4.7). A pointer dismissal moves nothing.
+- **The phone height guard (NEH-1975) stays.** Five cards of wrapped text at
+  `xl` are taller than a 640px phone, so the region is still capped at half
+  the screen below `lg` and scrolls by touch with no scrollbar drawn; on a
+  desktop five cards fit and nothing scrolls. The component tier measures five
+  at 320×640.
+
+Reviewed before building (`ask-gemini --review-prd` plus three scoped reads).
+Adopted: the visible word, "Dismiss all", the landmark fallback, two minutes
+before folding in the host, the fold and countdown not running while the tab
+is hidden, keeping the height guard. Rejected: cutting the fold (the owner
+asked for it), auto-dismissing successes by default (the owner's default is
+that nothing leaves until the reader says so), and "this is a major bump" —
+the ordering rule above is satisfied by the version number, as for 0.21.0 and
+0.32.0.
 
 ## A wrapper between a prop and the element it describes (NEH-1475)
 
