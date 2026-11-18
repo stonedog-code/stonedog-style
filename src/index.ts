@@ -418,7 +418,8 @@ export type {
 // Notifications
 // ---------------------------------------------------------------------------
 export { default as StyledToaster, StyledToaster as Toaster } from "./components/StyledToaster";
-export type { StyledToasterProps } from "./components/StyledToaster";
+export type { StyledToasterProps, AutoDismissPolicy } from "./components/StyledToaster";
+export { effectiveDuration } from "./components/StyledToaster";
 
 export { createToaster, DEFAULT_DURATIONS } from "./components/toaster-store";
 export type {
@@ -428,6 +429,7 @@ export type {
   ToastType,
   ToasterStore,
   ToasterStoreOptions,
+  ToastOverflow,
 } from "./components/toaster-store";
 
 export { default as useDisclosure } from "./components/useDisclosure";

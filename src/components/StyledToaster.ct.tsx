@@ -112,7 +112,9 @@ test.describe("StyledToaster — pointer semantics", () => {
     expect(underneath).not.toBeNull();
     // The region is `position: fixed` across the corner; whatever is at the top
     // of the page must still be the thing a click would reach.
-    expect(["DIV", "BODY", "HTML"]).toContain(underneath);
+    // `MAIN` since 0.46.0: the harness renders a landmark for the focus
+    // fallback to land on, and it sits under the region's band.
+    expect(["DIV", "MAIN", "BODY", "HTML"]).toContain(underneath);
   });
 
   test("the card itself does receive pointer events", async ({ mount, page }) => {
@@ -307,5 +309,155 @@ test.describe("StyledToaster — narrow screens at the largest text size", () =>
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.wheel(0, 300);
     await expect.poll(() => region.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Notifications that stay (0.46.0, NEH-2262): the word on the close control,
+ * "Dismiss all", the fold, and the cap of five under the phone height guard.
+ * jsdom owns the timers and the roles; what is measured here is what a finger
+ * and a focus ring meet.
+ */
+const PERSISTENT = { enabled: false, afterMs: 0 };
+const FIVE = Array.from({ length: 5 }, (_, i) => ({
+  title: `Reading saved. (${i + 1})`,
+  type: "success" as const,
+}));
+
+test.describe("StyledToaster — notifications that stay", () => {
+  test("the close control carries a visible word, inside its accessible name, at the tap-target floor", async ({ mount, page }) => {
+    await mount(<ToasterHarness toasterProps={{ autoDismiss: PERSISTENT }} />);
+    const close = page.getByRole("button", { name: "Dismiss notification" });
+    await expect(close).toBeVisible();
+    await expect(close).toContainText("Dismiss");
+
+    const box = (await close.boundingBox())!;
+    expect(box.width).toBeGreaterThanOrEqual(TAP_TARGET_FLOOR);
+    expect(box.height).toBeGreaterThanOrEqual(TAP_TARGET_FLOOR);
+
+    // The word is painted at the card's size, not the user agent's 13.33px:
+    // a <button> inherits no font unless told to.
+    const [cardSize, wordSize] = await Promise.all([
+      page.getByRole("status").evaluate((el) => getComputedStyle(el).fontSize),
+      close.locator("span").last().evaluate((el) => getComputedStyle(el).fontSize),
+    ]);
+    expect(wordSize).toBe(cardSize);
+  });
+
+  test("Dismiss all is a real target and clears the stack", async ({ mount, page }) => {
+    await mount(
+      <ToasterHarness
+        toasts={FIVE.slice(0, 2)}
+        toasterProps={{ autoDismiss: PERSISTENT }}
+      />,
+    );
+    const all = page.getByRole("button", { name: "Dismiss all" });
+    await expect(all).toBeVisible();
+    const box = (await all.boundingBox())!;
+    expect(box.height).toBeGreaterThanOrEqual(TAP_TARGET_FLOOR);
+
+    // Hit-test, not rectangles: the region is `pointer-events: none`, so a
+    // control laid out inside it is not necessarily the thing a tap reaches.
+    const hit = await page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.closest("button")?.textContent ?? null,
+      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+    );
+    expect(hit).toBe("Dismiss all");
+
+    await all.click();
+    await expect(page.getByRole("status")).toHaveCount(0);
+  });
+
+  test("five cards at 320×640 leave half the screen uncovered, and never run off it", async ({ mount, page }) => {
+    // The NEH-1975 guard, now asked about the cap this feature introduces.
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.addStyleTag({ content: LARGE_RAMP });
+    await mount(
+      <ToasterHarness
+        toasts={FIVE}
+        fontSizeProfile="xl"
+        storeOptions={{ max: 5, overflow: "displace" }}
+        toasterProps={{ autoDismiss: PERSISTENT }}
+      />,
+    );
+    await expect(page.getByRole("status")).toHaveCount(5);
+
+    const region = page.getByLabel("Notifications");
+    const box = (await region.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.height).toBeLessThanOrEqual(640 / 2 + 1);
+
+    const overflows = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflows).toBe(false);
+  });
+
+  test("a sixth card displaces the oldest rather than queueing", async ({ mount, page }) => {
+    await mount(
+      <ToasterHarness
+        toasts={[...FIVE, { title: "Sixth", type: "success" }]}
+        storeOptions={{ max: 5, overflow: "displace" }}
+        toasterProps={{ autoDismiss: PERSISTENT }}
+      />,
+    );
+    await expect(page.getByRole("status")).toHaveCount(5);
+    await expect(page.getByRole("status").filter({ hasText: "Sixth" })).toHaveCount(1);
+    await expect(page.getByRole("status").filter({ hasText: "(1)" })).toHaveCount(0);
+  });
+
+  test("an idle stack folds to one line that is a real target, and unfolds on activation", async ({ mount, page }) => {
+    await mount(
+      <ToasterHarness
+        toasts={FIVE.slice(0, 3)}
+        toasterProps={{ autoDismiss: PERSISTENT, collapseAfterMs: 300 }}
+      />,
+    );
+    await expect(page.getByRole("status")).toHaveCount(3);
+
+    const fold = page.getByRole("button", { name: "Notifications (3)" });
+    await expect(fold).toBeVisible({ timeout: 3000 });
+    // Folded cards are off the screen, out of the tree and out of the tab
+    // order — not merely transparent.
+    await expect(page.getByRole("status")).toHaveCount(0);
+    const hiddenCards = await page.locator("[role='status'][hidden]").count();
+    expect(hiddenCards).toBe(3);
+
+    const box = (await fold.boundingBox())!;
+    expect(box.height).toBeGreaterThanOrEqual(TAP_TARGET_FLOOR);
+    expect(box.width).toBeGreaterThanOrEqual(TAP_TARGET_FLOOR);
+    const hit = await page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.closest("button")?.textContent ?? null,
+      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+    );
+    expect(hit).toBe("Notifications (3)");
+
+    await fold.click();
+    await expect(page.getByRole("status")).toHaveCount(3);
+    await expect(fold).toHaveCount(0);
+  });
+
+  test("Enter on a close control dismisses and moves focus to the next card's control", async ({ mount, page }) => {
+    await mount(
+      <ToasterHarness
+        toasts={FIVE.slice(0, 2)}
+        toasterProps={{ autoDismiss: PERSISTENT }}
+      />,
+    );
+    const closes = page.getByRole("button", { name: "Dismiss notification" });
+    await expect(closes).toHaveCount(2);
+    await closes.first().focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("status")).toHaveCount(1);
+    const focusedIsClose = await page.evaluate(
+      () => document.activeElement?.getAttribute("aria-label") === "Dismiss notification",
+    );
+    expect(focusedIsClose).toBe(true);
+
+    // The last one: focus lands on the page's main landmark, never on body.
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("status")).toHaveCount(0);
+    const landed = await page.evaluate(() => document.activeElement?.id ?? document.activeElement?.tagName);
+    expect(landed).toBe("harness-main");
   });
 });

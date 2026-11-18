@@ -881,6 +881,51 @@ recovery code with letters or a password as well as a TOTP. Pass
 `"one-time-code"`) — e.g. `"current-password"` — when the field takes a
 password.
 
+## Notifications — `StyledToaster`
+
+One store, one renderer, mounted once near the root:
+
+```tsx
+export const toaster = createToaster({ max: 5, overflow: "displace" });
+
+<StyledToaster
+  toaster={toaster}
+  icons={myIcons}                     // the package ships no artwork
+  autoDismiss={{ enabled: false, afterMs: 60_000 }}   // the reader's setting
+  collapseAfterMs={120_000}
+/>
+
+toaster.create({ title: "Saved.", type: "success" });
+```
+
+### What it guarantees
+
+- **Every card can be dismissed** — a 48px close control with a glyph and the
+  visible word "Dismiss", named "Dismiss notification" so the name contains the
+  word. `closable: false` on a toast removes it; `closeText={null}` drops the
+  word.
+- **Whether anything times out is the host's call.** Pass no `autoDismiss` and
+  every card keeps the store's duration (success 2 s, the rest 5 s, `loading`
+  until updated). Pass `{ enabled: false }` and every card stays until it is
+  dismissed; pass `{ enabled: true, afterMs }` and every card leaves after
+  `afterMs`, paused while hovered, focused or in a hidden tab. A `loading`
+  toast's clock starts when it is updated.
+- **A cap with no queue**, when you want one: `createToaster({ max: 5,
+  overflow: "displace" })` shows the newest and dismisses the card least worth
+  keeping — never an error while a non-error is up. The default,
+  `overflow: "queue"`, holds the extra ones unseen until a slot opens.
+- **An untouched stack folds** after `collapseAfterMs` into one button,
+  "Notifications (3)", that unfolds it; a new toast unfolds it too. Omit the
+  prop and nothing folds.
+- **"Dismiss all"** appears with two or more cards (`dismissAllLabel`, `null`
+  to remove).
+- **Keyboard dismissal never strands focus**: the next card's close control,
+  then where focus came from, then the page's `main` landmark
+  (`returnFocusSelector`).
+- Each card is a polite `role="status"`, `aria-atomic`, with a glyph and a
+  leading accent so status is never colour alone; the region exists from mount
+  so screen readers announce consistently; nothing is queued during SSR.
+
 ## Adopting a component as it is migrated
 
 Components move out of HopperGuard into this package one at a time.

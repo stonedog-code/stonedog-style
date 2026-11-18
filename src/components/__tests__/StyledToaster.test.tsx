@@ -103,9 +103,11 @@ describe("StyledToaster — status is never carried by colour alone", () => {
     const { toaster } = renderToaster();
     emit(() => toaster.create({ title: "Plain", type: "default" }));
 
+    // `:scope >` because the close control (on every card since 0.46.0) also
+    // hides its glyph from the reader; only the INDICATOR is a direct child.
     const toast = screen.getByRole("status");
     expect(toast).toHaveTextContent("Plain");
-    expect(toast.querySelector("[aria-hidden='true']")).toBeNull();
+    expect(toast.querySelector(":scope > [aria-hidden='true']")).toBeNull();
   });
 
   it("still renders an indicator for a status toast — the control for the above", () => {
@@ -114,7 +116,7 @@ describe("StyledToaster — status is never carried by colour alone", () => {
     const { toaster } = renderToaster();
     emit(() => toaster.create({ title: "Plain", type: "success" }));
     expect(
-      screen.getByRole("status").querySelector("[aria-hidden='true']"),
+      screen.getByRole("status").querySelector(":scope > [aria-hidden='true']"),
     ).not.toBeNull();
   });
 });
@@ -257,10 +259,38 @@ describe("StyledToaster — controls", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  it("renders no close control unless one was asked for", () => {
+  it("renders a close control on every toast unless asked not to", () => {
+    // Inverted in 0.46.0 (NEH-2262): this used to assert the ABSENCE of a
+    // close control on a toast that did not ask for one. A message the reader
+    // cannot dismiss is a message the reader cannot finish with, so the
+    // default flipped; `closable: false` is the name for the old shape.
     const { toaster } = renderToaster();
     emit(() => toaster.create({ title: "Saved." }));
+    expect(
+      screen.getByRole("button", { name: "Dismiss notification" }),
+    ).toBeInTheDocument();
+
+    emit(() => toaster.remove());
+    act(() => { jest.advanceTimersByTime(200); });
+    emit(() => toaster.create({ title: "Must stay", closable: false }));
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("puts a visible word beside the glyph, and the name contains it", () => {
+    // WCAG 2.5.3 Label in Name: a sighted reader using speech says what they
+    // see, and "Dismiss" must reach the control named "Dismiss notification".
+    const { toaster } = renderToaster();
+    emit(() => toaster.create({ title: "Saved." }));
+    const close = screen.getByRole("button", { name: "Dismiss notification" });
+    expect(close).toHaveTextContent("Dismiss");
+    expect(close.getAttribute("aria-label")).toContain("Dismiss");
+  });
+
+  it("drops the word when a host asks for the glyph alone", () => {
+    const { toaster } = renderToaster({ closeText: null });
+    emit(() => toaster.create({ title: "Saved." }));
+    const close = screen.getByRole("button", { name: "Dismiss notification" });
+    expect(close).not.toHaveTextContent("Dismiss");
   });
 
   it("runs the action and then takes the toast away", () => {

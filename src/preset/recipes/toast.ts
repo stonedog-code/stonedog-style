@@ -37,6 +37,9 @@ export const toastRecipe = defineSlotRecipe({
     "description",
     "action",
     "close",
+    "closeText",
+    "toolbar",
+    "fold",
   ],
   base: {
     region: {
@@ -145,6 +148,13 @@ export const toastRecipe = defineSlotRecipe({
         opacity: "1",
         transform: "translateY(0)",
       },
+      // A folded card (0.46.0). The renderer sets the HTML `hidden` attribute
+      // so the card leaves the accessibility tree and the tab order, and this
+      // rule is what makes it leave the screen: `display: flex` above would
+      // otherwise beat the attribute's user-agent `display: none`.
+      "&[hidden]": {
+        display: "none",
+      },
     },
     indicator: {
       flexShrink: 0,
@@ -156,6 +166,13 @@ export const toastRecipe = defineSlotRecipe({
     },
     content: {
       flex: "1",
+      // Below `lg` the message claims most of the first row, so the close
+      // control — a glyph AND a word since 0.46.0, ~120px at the largest text
+      // step — wraps onto the second row beside the action instead of
+      // squeezing the text into a column one word wide. Measured at 320×640
+      // and `xl`: the control inline made a two-line notice 362px tall; on
+      // its own row the same notice is shorter than the 320px region.
+      flexBasis: { base: "60%", lg: "0%" },
       minWidth: "0",
       // A long word at a large text step is wider than a narrow card's
       // message column. Without this it overflows the column and runs under
@@ -180,7 +197,10 @@ export const toastRecipe = defineSlotRecipe({
       // word per line — a toast taller than half a phone screen. `order`
       // moves it visually only; the DOM, and so the reading and tab order, are
       // unchanged.
-      flexBasis: { base: "100%", lg: "auto" },
+      // `auto` rather than the `100%` this had until 0.46.0: it shares the
+      // second row with the close control now, which is the row the control
+      // used to force the message out of.
+      flexBasis: "auto",
       order: { base: 1, lg: 0 },
     },
     close: {
@@ -192,15 +212,75 @@ export const toastRecipe = defineSlotRecipe({
       // control is the one thing on a toast a person is *aiming* at, often
       // while it is animating, so it is the last place to shave a target down
       // to the size of its glyph.
+      //
+      // Below `lg` it takes the second row, after the action and pushed to
+      // the inline end; the DOM order (and so reading and tab order) is
+      // unchanged, the close control is still last.
+      order: { base: 2, lg: 0 },
+      marginInlineStart: { base: "auto", lg: "0" },
       minWidth: "48px",
       minHeight: "48px",
+      gap: "2",
+      paddingInline: "3",
       borderRadius: "md",
       borderWidth: "1px",
       borderStyle: "solid",
-      borderColor: "transparent",
+      borderColor: "borderBgPrimary",
       background: "transparent",
       color: "inherit",
+      // A <button> inherits no font. Stated, so the word beside the glyph is
+      // the card's size and face rather than the user agent's 13.33px.
+      font: "inherit",
       cursor: "pointer",
+    },
+    /**
+     * The word beside the glyph (0.46.0): "Dismiss". A visible label on every
+     * icon is the house floor for this package's first audience, and WCAG
+     * 2.5.3 then asks that the accessible name contain it — see `closeLabel`.
+     */
+    closeText: {
+      whiteSpace: "nowrap",
+    },
+    /**
+     * Holds "Dismiss all" (0.46.0). Re-enables pointer events the region
+     * switched off, exactly as a card does; the button inside is the host's
+     * own `StyledButton`, so it carries the 48px floor and the variant paint.
+     */
+    toolbar: {
+      pointerEvents: "auto",
+      flexShrink: 0,
+      display: "flex",
+      justifyContent: "flex-end",
+    },
+    /**
+     * The one line an idle stack folds to (0.46.0, NEH-2262): "Notifications
+     * (3)". A real button, styled as a card so it reads as the stack it stands
+     * for — same surface, same border, same shadow, same corner — and the same
+     * 48px floor as every other interactive thing here. Its text is its name;
+     * there is no icon-only state to decode.
+     */
+    fold: {
+      pointerEvents: "auto",
+      flexShrink: 0,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: "48px",
+      minWidth: "48px",
+      paddingInline: "4",
+      paddingBlock: "3",
+      borderRadius: "md",
+      boxShadow: "lg",
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: "borderBgPrimary",
+      backgroundColor: "boxBgPrimary",
+      color: "textPrimary",
+      fontFamily: "body",
+      fontSize: "md",
+      fontWeight: "bold",
+      cursor: "pointer",
+      maxWidth: "min(400px, calc(100vw - {spacing.8}))",
     },
   },
   variants: {

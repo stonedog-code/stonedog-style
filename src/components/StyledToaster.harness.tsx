@@ -1,6 +1,6 @@
 import React from "react";
-import StyledToaster from "./StyledToaster";
-import { createToaster, type ToastOptions } from "./toaster-store";
+import StyledToaster, { type StyledToasterProps } from "./StyledToaster";
+import { createToaster, type ToastOptions, type ToasterStoreOptions } from "./toaster-store";
 import { StonedogStyleProvider } from "../config/style-config";
 import type { FontSizeProfile } from "../config/types";
 
@@ -22,9 +22,15 @@ export function ToasterHarness({
   toasts = [{ title: "Saved.", type: "success" as const }],
   surface = "#0f172a",
   fontSizeProfile,
+  storeOptions,
+  toasterProps,
 }: {
   toasts?: ToastOptions[];
   surface?: string;
+  /** `createToaster` options — the cap and the overflow rule (0.46.0). */
+  storeOptions?: ToasterStoreOptions;
+  /** Everything but `toaster`: the policy, the fold, the labels (0.46.0). */
+  toasterProps?: Omit<StyledToasterProps, "toaster">;
   /**
    * The reader's text-size step. Omitted, the toaster renders outside any
    * provider, exactly as before. The narrow-viewport tests pass `xl`, because
@@ -32,7 +38,7 @@ export function ToasterHarness({
    */
   fontSizeProfile?: FontSizeProfile;
 }) {
-  const [toaster] = React.useState(() => createToaster());
+  const [toaster] = React.useState(() => createToaster(storeOptions));
 
   // Refs rather than effect dependencies. Seeding must happen exactly once —
   // listing `toasts` would re-push the whole set every time Playwright caused a
@@ -58,7 +64,10 @@ export function ToasterHarness({
         margin: 0,
       }}
     >
-      <StyledToaster toaster={toaster} />
+      <main id="harness-main" style={{ padding: 16 }}>
+        Page content
+      </main>
+      <StyledToaster toaster={toaster} {...toasterProps} />
     </div>
   );
 
